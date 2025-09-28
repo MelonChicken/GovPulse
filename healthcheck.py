@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """
-Ultimate Health Check Script with Advanced Text Processing
+Enhanced Health Check Script
 
-Key improvements addressing identified issues:
-1. ENCODING FIXES: apparent_encoding with fallback chain
-2. TEXT NORMALIZATION: Unicode (NFKC) + whitespace normalization
-3. COMPREHENSIVE KEYWORDS: Domain-specific + global + regex patterns
-4. TITLE EXTRACTION: HTML title tag inspection
-5. JS RENDERING ISSUES: Static content focus with MIME type filtering
-6. NEGATIVE DETECTION: Configurable keyword matching strategy
+개선 사항:
+1. 상태 표현 개선: "Error" 대신 "Healthy/Unhealthy" 사용
+2. 간소화된 판정 로직: HTTP 200 + 키워드 없음 → "Healthy", 그 외 → "Unhealthy"
+3. UTC 타임스탬프 지원
+4. 향상된 인코딩 처리 및 오류 복구
+5. 기존 JSON 키워드 설정 완전 호환
+6. requests 라이브러리만 사용
 
-This is a drop-in replacement with JSON-based configuration.
+사용법:
+    python healthcheck.py [url_file.txt]
+    python healthcheck.py  # 기본 테스트 URL 사용
 """
 
 import requests
@@ -238,9 +240,8 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     user_agent = settings.get("user_agent", "healthcheck-bot/1.0")
     text_mime_only = settings.get("text_mime_only", True)
 
-    # Use KST (Korea Standard Time, UTC+9)
-    kst = datetime.timezone(datetime.timedelta(hours=9))
-    timestamp = datetime.datetime.now(kst).strftime("%Y-%m-%dT%H:%M:%S+09:00")
+    # Use UTC timestamp as requested
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     parsed = urlparse(url)
     domain = extract_domain(parsed.hostname or "")
 
@@ -268,10 +269,10 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
                     "url": url,
                     "domain": domain,
                     "status_code": status_code,
-                    "result": "BINARY_CONTENT",
+                    "result": "Unhealthy",
                     "response_time_ms": response_time_ms,
                     "content_type": content_type,
-                    "matched_keywords": "",
+                    "matched_keywords": "BINARY_CONTENT",
                     "title": "",
                     "content_sha256": "",
                     "error": "Non-text content type"
@@ -281,12 +282,12 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
             text_normalized, title, content_type = get_text_and_meta(response, max_bytes, cfg)
             content_hash = sha256_of_text(text_normalized)
 
-            # Handle non-200 status codes
+            # Simplified logic: HTTP 200 + no keywords → Healthy, everything else → Unhealthy
             if status_code != 200:
-                result = "HTTP_ERROR"
+                result = "Unhealthy"
                 matched_keywords = [f"HTTP_{status_code}"]
             else:
-                # Comprehensive keyword matching
+                # Comprehensive keyword matching for HTTP 200 responses
                 domain_keywords = pick_domain_keywords(cfg, domain)
                 all_plain_keywords = domain_keywords + failure_keywords_global
                 regex_patterns = compile_regexes(cfg.get("regex_keywords", []), case_insensitive)
@@ -295,7 +296,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
                     text_normalized, title, all_plain_keywords, regex_patterns, case_insensitive
                 )
 
-                result = "UNHEALTHY" if matched_keywords else "HEALTHY"
+                result = "Unhealthy" if matched_keywords else "Healthy"
 
             return {
                 "timestamp": timestamp,
@@ -320,16 +321,16 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             last_exception = f"Unexpected error: {str(e)}"
 
-    # All retries failed
+    # All retries failed - treat as Unhealthy with N/A status code
     return {
         "timestamp": timestamp,
         "url": url,
         "domain": domain,
-        "status_code": "FAILED",
-        "result": "ERROR",
+        "status_code": "N/A",
+        "result": "Unhealthy",
         "response_time_ms": -1,
         "content_type": "",
-        "matched_keywords": "",
+        "matched_keywords": f"CONNECTION_ERROR:{last_exception}",
         "title": "",
         "content_sha256": "",
         "error": last_exception
@@ -363,11 +364,8 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
 
         # Status display
         status_icon = {
-            "HEALTHY": "[OK]",
-            "UNHEALTHY": "[FAIL]",
-            "HTTP_ERROR": "[HTTP_ERR]",
-            "ERROR": "[ERROR]",
-            "BINARY_CONTENT": "[BINARY]"
+            "Healthy": "[OK]",
+            "Unhealthy": "[FAIL]"
         }.get(result['result'], "[UNKNOWN]")
 
         print(f"   {status_icon} {result['result']} (HTTP: {result['status_code']}) "
@@ -393,15 +391,14 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
         writer.writerows(results)
 
     # Summary statistics
-    healthy = sum(1 for r in results if r['result'] == 'HEALTHY')
-    unhealthy = sum(1 for r in results if r['result'] == 'UNHEALTHY')
-    errors = sum(1 for r in results if r['result'] == 'ERROR')
+    healthy = sum(1 for r in results if r['result'] == 'Healthy')
+    unhealthy = sum(1 for r in results if r['result'] == 'Unhealthy')
 
     print("-" * 60)
     print(f"Results Summary:")
     print(f"   Healthy: {healthy}")
     print(f"   Unhealthy: {unhealthy}")
-    print(f"   Errors: {errors}")
+    print(f"   Total: {len(results)}")
     print(f"   Saved to: {csv_filename}")
 
     return results
