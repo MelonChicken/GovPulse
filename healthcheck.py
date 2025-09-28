@@ -238,7 +238,9 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     user_agent = settings.get("user_agent", "healthcheck-bot/1.0")
     text_mime_only = settings.get("text_mime_only", True)
 
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Use KST (Korea Standard Time, UTC+9)
+    kst = datetime.timezone(datetime.timedelta(hours=9))
+    timestamp = datetime.datetime.now(kst).strftime("%Y-%m-%dT%H:%M:%S+09:00")
     parsed = urlparse(url)
     domain = extract_domain(parsed.hostname or "")
 
