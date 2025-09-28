@@ -1,0 +1,30 @@
+user_agent: "GovPublicStatusMonitor/1.0 (+youremail@domain)"
+timeouts:
+  connect_s: 5
+  read_s: 8
+  total_s: 12
+budgets:
+  per_host_min_interval_s: 60
+  per_endpoint_min_interval_s: 600
+  global_max_concurrency: 3
+  per_host_concurrency: 1
+
+endpoints:
+  - name: "정부24 메인"
+    url: "https://www.gov.kr/"
+    keywords: ["정부24", "Government 24"]
+  - name: "K-ETA 메인"
+    url: "https://www.k-eta.go.kr/"
+    keywords: ["K-ETA", "전자여행허가"]
+  - name: "전자입국신고 메인"
+    url: "https://www.e-arrivalcard.go.kr/"
+    keywords: ["전자입국신고", "e-Arrival"]
+  - name: "국가법령정보센터 메인"
+    url: "https://www.law.go.kr/"
+    keywords: ["국가법령", "법령정보"]
+  - name: "우정사업본부 메인"
+    url: "https://www.epost.go.kr/"
+    keywords: ["우정사업본부", "ePOST"]
+  - name: "공공데이터포털 메인"
+    url: "https://www.data.go.kr/"
+    keywords: ["공공데이터포털", "DATA.GO.KR"]
