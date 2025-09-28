@@ -1,0 +1,28 @@
+name: Keep server awake
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # 5분마다 (UTC 기준)
+  workflow_dispatch:        # 수동 실행 버튼
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping once with curl
+        env:
+          PING_URL: ${{ secrets.PING_URL }}
+        run: |
+          # 10초 타임아웃, 3회 재시도, 간단한 User-Agent
+          code=$(curl -sS -m 10 --retry 3 --retry-delay 2 \
+                 -A "keepalive-bot/1.0" \
+                 -o /dev/null -w "%{http_code}" "$PING_URL")
+          echo "HTTP $code"
+          # 2xx/3xx만 성공 처리
+          if [ "$code" -ge 400 ] || [ -z "$code" ]; then
+            exit 1
+          fi
