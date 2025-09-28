@@ -1,0 +1,20 @@
+# FastAPI and web framework dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# HTTP client libraries
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# Configuration and data handling
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Data structures and utilities
+typing-extensions>=4.8.0
+
+# Development dependencies (optional - uncomment if needed)
+# pytest>=7.4.0
+# pytest-asyncio>=0.21.0
+# black>=23.0.0
+# flake8>=6.0.0
