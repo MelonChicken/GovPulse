@@ -1,0 +1,10 @@
+timestamp_iso,url,domain,status_code,result,response_time_ms,title,matched_keyword,error_message
+2025-09-28T17:04:24.830785,https://www.law.go.kr/,www.law.go.kr,200,Healthy,1513.0,시스템 점검,,
+2025-09-28T17:04:26.845321,https://www.gov.kr/,www.gov.kr,404,Error,435.0,,,HTTP 404
+2025-09-28T17:04:27.783356,https://www.k-eta.go.kr/,www.k-eta.go.kr,200,Healthy,380.5,Welcome - K-ETA,,
+2025-09-28T17:04:28.664945,https://www.e-arrivalcard.go.kr/,www.e-arrivalcard.go.kr,200,Healthy,369.0,,,
+2025-09-28T17:04:29.534910,https://www.epost.go.kr/,www.epost.go.kr,200,Healthy,316.7,시스템 점검,,
+2025-09-28T17:04:30.352807,https://www.data.go.kr/,www.data.go.kr,N/A,Error,0,,,"Connection error: HTTPSConnectionPool(host='www.data.go.kr', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired (_ssl.c:1028)')))"
+2025-09-28T17:04:32.255207,https://httpbin.org/status/200,httpbin.org,200,Healthy,1855.1,,,
+2025-09-28T17:04:34.611593,https://httpbin.org/status/500,httpbin.org,500,Error,2557.1,,,HTTP 500
+2025-09-28T17:04:37.669885,https://httpbin.org/delay/2,httpbin.org,200,Healthy,5056.2,,,
