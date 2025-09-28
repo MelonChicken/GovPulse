@@ -13,7 +13,9 @@ ROOT_DIR = os.path.abspath(os.path.join(APP_DIR, ".."))
 endpoints = load_endpoints(os.path.join(ROOT_DIR, "endpoints.yaml"))
 rate = RateState(per_host_conc=settings.PER_HOST_CONCURRENCY,
                  global_conc=settings.GLOBAL_MAX_CONCURRENCY)
-checker = Checker(rate)
+# keywords.json 파일 경로 설정
+keywords_path = os.path.join(os.path.dirname(ROOT_DIR), "keywords.json")
+checker = Checker(rate, keywords_path)
 
 app = FastAPI(title="PolitePing — FastAPI only")
 
