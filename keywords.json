@@ -1,164 +1,121 @@
 {
   "global_keywords": [
-  "시스템 점검",
-  "서비스 중단",
-  "서비스가 중단",
-  "서비스 이용이 제한",
-  "불편을 드려 죄송",
-  "화재",
-  "열람 불가",
-  "대체사이트",
-  "원복 중",
-  "복구 중",
-  "긴급 점검",
-  "접속 불가",
-  "이용 불가",
-  "이용할 수 없습니다",
-  "접속 제한",
-  "이용이 제한됩니다",
-  "복구 중입니다",
-  "접속이 원활하지 않습니다",
-  "서비스 복구 중",
-  "이용에 불편",
-  "정상 서비스 재개",
-  "maintenance",
-  "temporarily unavailable",
-  "under construction",
-  "service unavailable",
-  "server error",
-  "503 service",
-  "502 bad gateway",
-  "504 gateway timeout",
-  "시스템 오류",
-  "서비스 지연",
-  "서비스 이용 불가",
-  "접속 장애",
-  "일시 중단",
-  "일시적으로 이용할 수 없습니다",
-  "현재 이용이 불가",
-  "정상화 작업 중",
-  "긴급 복구",
-  "장애 발생",
-  "장애 안내",
-  "서비스 이용 제한 안내",
-  "일시적으로 중단",
-  "현재 점검 중",
-  "현재 서비스 불가",
-  "시스템 장애",
-  "접속이 지연되고 있습니다",
-  "서비스가 원활하지 않습니다",
-  "일부 기능 제한",
-  "서비스 이용에 차질",
-  "서비스 정상화 중",
-  "network error",
-  "connection refused",
-  "temporarily down",
-  "system error",
-  "internal server error",
-  "site unavailable",
-  "currently unavailable",
-  "downtime",
-  "scheduled maintenance",
-  "unexpected outage"
-],
+    "시스템 점검",
+    "서비스 점검",
+    "서비스 중단",
+    "서비스 이용이 제한",
+    "불편을 드려 죄송",
+    "화재",
+    "열람 불가",
+    "대체사이트",
+    "원복 중",
+    "복구 중",
+    "긴급 점검",
+    "접속 불가",
+    "이용 불가",
+    "이용할 수 없습니다",
+    "접속 제한",
+    "이용이 제한됩니다",
+    "복구 중입니다",
+    "접속이 원활하지 않습니다",
+    "서비스 복구 중",
+    "이용에 불편",
+    "시스템 오류",
+    "서비스 지연",
+    "접속 장애",
+    "일시 중단",
+    "일시적으로 이용할 수 없습니다",
+    "현재 이용이 불가",
+    "정상화 작업 중",
+    "장애 발생",
+    "장애 안내",
+    "현재 점검 중",
+    "현재 서비스 불가",
+    "시스템 장애",
+    "접속이 지연되고 있습니다",
+    "서비스가 원활하지 않습니다",
+    "일부 기능 제한",
+    "서비스 이용에 차질",
+    "서비스 정상화 중",
+    "maintenance",
+    "temporarily unavailable",
+    "under construction",
+    "service unavailable",
+    "server error",
+    "temporarily down",
+    "system error",
+    "internal server error",
+    "site unavailable",
+    "currently unavailable",
+    "downtime",
+    "scheduled maintenance",
+    "unexpected outage",
+    "502 bad gateway",
+    "503 service",
+    "504 gateway timeout"
+  ],
   "domains": {
-    "law.go.kr": [
-      "법령정보 열람 관련 대체사이트",
-      "국가정보자원관리원 전산실 화재",
-      "법령 서비스 중단",
-      "데이터베이스 점검",
-      "법령정보 업데이트",
-      "법령정보센터 접속 불가",
-      "법령정보 열람이 불가하니",
-      "사이트를 이용해달라",
-      "법령정보 서비스 장애",
-      "전산실 화재로 인한",
-      "법령정보 이용 불가"
-    ],
-    "www.gov.kr": [
-      "정부24 점검",
-      "민원 서비스 중단"
-    ],
-    "epost.go.kr": [
-      "인터넷우체국 서비스 이용 불가",
-      "접속이 원활하지 않습니다",
-      "서비스 복구 중",
-      "우체국 시스템 점검",
-      "epost 서비스 장애",
-      "인터넷 우체국 접속 불가",
-      "우체국 홈페이지 이용 불가",
-      "시스템 장애로 인한"
-    ],
-    "*.go.kr": [
-      "정부 시스템 점검",
-      "공공서비스 일시 중단",
-      "전산 장애",
-      "네트워크 점검",
-      "시스템 점검",
-      "서비스 점검"
-    ],
-    "httpbin.org": [
-      "test maintenance",
-      "demo service down"
-    ]
+    "law.go.kr": {
+      "keywords": [
+        "법령정보 열람 관련 대체사이트",
+        "국가정보자원관리원 전산실 화재",
+        "법령정보센터 접속 불가",
+        "법령정보 서비스 장애",
+        "법령정보 열람이 불가"
+      ],
+      "probe_paths": ["/robots.txt", "/sitemap.xml"]
+    },
+    "epost.go.kr": {
+      "keywords": [
+        "인터넷우체국 서비스 이용 불가",
+        "접속이 원활하지 않습니다",
+        "서비스 복구 중",
+        "우체국 시스템 점검",
+        "인터넷 우체국 접속 불가",
+        "우체국 홈페이지 이용 불가",
+        "시스템 장애로 인한"
+      ],
+      "probe_paths": ["/robots.txt"]
+    },
+    "www.gov.kr": {
+      "keywords": [
+        "정부24 점검",
+        "민원 서비스 중단"
+      ],
+      "probe_paths": ["/robots.txt", "/sitemap.xml"]
+    },
+    "*.go.kr": {
+      "keywords": [
+        "정부 시스템 점검",
+        "공공서비스 일시 중단",
+        "전산 장애",
+        "네트워크 점검"
+      ]
+    },
+    "httpbin.org": {
+      "keywords": [
+        "test maintenance",
+        "demo service down"
+      ]
+    }
   },
   "regex_keywords": [
-    {
-      "pattern": "점검\\s*중",
-      "flags": "i"
-    },
-    {
-      "pattern": "원복\\s*중",
-      "flags": "i"
-    },
-    {
-      "pattern": "복구\\s*중",
-      "flags": "i"
-    },
-    {
-      "pattern": "service.*down",
-      "flags": "i"
-    },
-    {
-      "pattern": "temporarily.*unavailable",
-      "flags": "i"
-    },
-    {
-      "pattern": "시스템.*장애",
-      "flags": "i"
-    },
-    {
-      "pattern": "접속.*불가",
-      "flags": "i"
-    },
-    {
-      "pattern": "접속.*원활하지.*않",
-      "flags": "i"
-    },
-    {
-      "pattern": "이용.*불가",
-      "flags": "i"
-    },
-    {
-      "pattern": "이용.*제한",
-      "flags": "i"
-    },
-    {
-      "pattern": "일시.*중단",
-      "flags": "i"
-    },
-    {
-      "pattern": "대체.*사이트.*이용",
-      "flags": "i"
-    },
-    {
-      "pattern": "법령정보.*열람.*불가",
-      "flags": "i"
-    },
-    {
-      "pattern": "서비스.*복구.*중",
-      "flags": "i"
-    }
+    { "pattern": "점검\\s*중", "flags": "i" },
+    { "pattern": "원복\\s*중", "flags": "i" },
+    { "pattern": "복구\\s*중", "flags": "i" },
+    { "pattern": "정상화\\s*작업\\s*중", "flags": "i" },
+    { "pattern": "접속\\s*불가", "flags": "i" },
+    { "pattern": "접속.*원활하지.*않", "flags": "i" },
+    { "pattern": "접속.*지연", "flags": "i" },
+    { "pattern": "이용\\s*불가", "flags": "i" },
+    { "pattern": "이용\\s*제한", "flags": "i" },
+    { "pattern": "일시\\s*중단", "flags": "i" },
+    { "pattern": "대체.*사이트.*이용", "flags": "i" },
+    { "pattern": "법령정보.*열람.*불가", "flags": "i" },
+    { "pattern": "서비스.*복구.*중", "flags": "i" },
+    { "pattern": "(bad\\s*gateway|gateway\\s*time\\s*out|service\\s*unavailable)", "flags": "i" },
+    { "pattern": "(access\\s*denied|temporarily\\s*unavailable|we\\s*are\\s*working\\s*to\\s*restore)", "flags": "i" },
+    { "pattern": "internal\\s*server\\s*error", "flags": "i" }
   ],
   "settings": {
     "case_insensitive": true,
@@ -166,6 +123,9 @@
     "max_bytes_to_scan": 3000000,
     "timeout_seconds": 8,
     "retries": 1,
-    "user_agent": "healthcheck-bot/1.0"
+    "user_agent": "healthcheck-bot/1.0",
+    "check_title": true,
+    "text_mime_only": true,
+    "min_text_length_for_healthy": 1000
   }
 }

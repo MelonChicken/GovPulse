@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-Enhanced Health Check Script
+Enhanced Health Check Script - v2024.12
 
 개선 사항:
-1. 상태 표현 개선: "Error" 대신 "Healthy/Unhealthy" 사용
-2. 간소화된 판정 로직: HTTP 200 + 키워드 없음 → "Healthy", 그 외 → "Unhealthy"
-3. UTC 타임스탬프 지원
-4. 향상된 인코딩 처리 및 오류 복구
-5. 기존 JSON 키워드 설정 완전 호환
-6. requests 라이브러리만 사용
+1. 확장된 텍스트 검사: 본문 + title + meta + noscript 통합 분석
+2. 간소화된 상태: Healthy/Unhealthy만 존재 (Error, SKIPPED 제거)
+3. 강화된 probe 검사: 텍스트 길이, 구조적 완성도 확인
+4. 추가 regex 패턴: 일반적인 장애 메시지 탐지
+5. UTF-8 우선 인코딩 처리
 
 사용법:
     python healthcheck.py [url_file.txt]
@@ -27,8 +26,35 @@ from typing import List, Dict, Any, Tuple
 
 def load_keywords(json_path: str) -> Dict[str, Any]:
     """Load and validate keywords configuration from JSON file"""
-    with open(json_path, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except FileNotFoundError:
+        # 기본 설정 생성
+        cfg = {
+            "global_keywords": [
+                "시스템 점검", "서비스 중단", "maintenance", "temporarily unavailable",
+                "server error", "503 service", "502 bad gateway", "504 gateway timeout",
+                "일시적으로 사용할 수 없습니다", "서비스 장애", "접속 불가"
+            ],
+            "domains": {},
+            "regex_keywords": [
+                {"pattern": r"(시스템\s*점검|서비스\s*중단|일시\s*중단)", "flags": "i"},
+                {"pattern": r"(maintenance|temporarily\s*unavailable|service\s*unavailable)", "flags": "i"},
+                {"pattern": r"(server\s*error|internal\s*error|50[0-9]\s*error)", "flags": "i"},
+                {"pattern": r"(gateway\s*time\s*out|service\s*unavailable)", "flags": "i"},
+                {"pattern": r"(access\s*denied|temporarily\s*unavailable|we\s*are\s*working\s*to\s*restore)", "flags": "i"}
+            ],
+            "settings": {
+                "case_insensitive": True,
+                "normalize_whitespace": True,
+                "max_bytes_to_scan": 3000000,
+                "timeout_seconds": 8,
+                "retries": 1,
+                "user_agent": "healthcheck-bot/1.0",
+                "min_text_length": 100
+            }
+        }
 
     # Set default values with comprehensive fallbacks
     cfg.setdefault("global_keywords", [])
@@ -39,12 +65,11 @@ def load_keywords(json_path: str) -> Dict[str, Any]:
     s = cfg["settings"]
     s.setdefault("case_insensitive", True)
     s.setdefault("normalize_whitespace", True)
-    s.setdefault("max_bytes_to_scan", 3_000_000)
+    s.setdefault("max_bytes_to_scan", 3000000)
     s.setdefault("timeout_seconds", 8)
     s.setdefault("retries", 1)
     s.setdefault("user_agent", "healthcheck-bot/1.0")
-    s.setdefault("check_title", True)
-    s.setdefault("text_mime_only", True)
+    s.setdefault("min_text_length", 100)
 
     return cfg
 
@@ -91,57 +116,105 @@ def normalize_text(s: str, case_insensitive: bool, normalize_ws: bool) -> str:
 
     return s
 
-def extract_title(html: str) -> str:
+def extract_comprehensive_text(html: str) -> Tuple[str, str, str, str]:
     """
-    Extract HTML title for additional keyword checking.
-    Addresses JS rendering issues by checking static title tags.
+    Extract comprehensive text from HTML including:
+    - Title tag content
+    - Meta description and og:* properties
+    - Noscript content
+    - Main body text
     """
+    # Extract title
     title_match = re.search(r"<title[^>]*>(.*?)</title>", html, flags=re.IGNORECASE | re.DOTALL)
-    if not title_match:
-        return ""
+    title = ""
+    if title_match:
+        title = title_match.group(1)
+        title = re.sub(r"<[^>]+>", "", title)  # Remove nested tags
+        title = re.sub(r"\s+", " ", title).strip()
 
-    title = title_match.group(1)
-    # Clean up title content
-    title = re.sub(r"<[^>]+>", "", title)  # Remove any nested tags
-    title = re.sub(r"\s+", " ", title).strip()
-    return title
+    # Extract meta description
+    meta_desc = ""
+    meta_desc_match = re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
+    if meta_desc_match:
+        meta_desc = meta_desc_match.group(1)
 
-def get_text_and_meta(resp: requests.Response, max_bytes: int, cfg: Dict[str, Any]) -> Tuple[str, str, str]:
+    # Extract og:* meta properties
+    og_metas = []
+    og_matches = re.findall(r'<meta[^>]*property=["\']og:[^"\']*["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
+    og_metas.extend(og_matches)
+
+    # Also check reverse order (content first, then property)
+    og_matches_rev = re.findall(r'<meta[^>]*content=["\']([^"\']*)["\'][^>]*property=["\']og:[^"\']*["\']', html, re.IGNORECASE)
+    og_metas.extend(og_matches_rev)
+
+    # Extract noscript content
+    noscript_content = ""
+    noscript_matches = re.findall(r"<noscript[^>]*>(.*?)</noscript>", html, flags=re.IGNORECASE | re.DOTALL)
+    if noscript_matches:
+        noscript_combined = " ".join(noscript_matches)
+        # Remove HTML tags from noscript content
+        noscript_content = re.sub(r"<[^>]+>", " ", noscript_combined)
+        noscript_content = re.sub(r"\s+", " ", noscript_content).strip()
+
+    # Combine all extracted text
+    combined_parts = []
+    if title:
+        combined_parts.append(title)
+    if meta_desc:
+        combined_parts.append(meta_desc)
+    if og_metas:
+        combined_parts.extend(og_metas)
+    if noscript_content:
+        combined_parts.append(noscript_content)
+
+    # Add main body (remove script and style tags first)
+    body_text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.IGNORECASE | re.DOTALL)
+    body_text = re.sub(r"<[^>]+>", " ", body_text)
+    body_text = re.sub(r"\s+", " ", body_text).strip()
+    combined_parts.append(body_text)
+
+    comprehensive_text = " ".join(combined_parts)
+
+    return comprehensive_text, title, meta_desc, noscript_content
+
+def get_comprehensive_content(resp: requests.Response, max_bytes: int, cfg: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
     """
-    Extract and normalize text content with encoding fixes.
-
-    ENCODING PROBLEM SOLUTION:
-    - Uses apparent_encoding as fallback when encoding detection fails
-    - Handles encoding mismatches that cause keyword matching failures
+    Extract comprehensive content with improved encoding handling.
+    Returns: (comprehensive_text, title, meta_desc, noscript, content_type)
     """
-    # CRITICAL FIX: Encoding detection and correction
+    # Enhanced encoding detection - prioritize UTF-8
     if not resp.encoding or resp.encoding == 'ISO-8859-1':
-        # Fall back to apparent_encoding for better detection
-        resp.encoding = resp.apparent_encoding or "utf-8"
+        # Check if content looks like UTF-8
+        try:
+            resp.content.decode('utf-8')
+            resp.encoding = 'utf-8'
+        except UnicodeDecodeError:
+            # Fall back to apparent_encoding
+            resp.encoding = resp.apparent_encoding or "utf-8"
 
     content_type = resp.headers.get("Content-Type", "").lower()
 
     # Get text content with size limit
     try:
-        raw_text = resp.text
+        raw_html = resp.text
     except UnicodeDecodeError:
         # Last resort: force UTF-8 with error handling
-        raw_text = resp.content.decode('utf-8', errors='ignore')
+        raw_html = resp.content.decode('utf-8', errors='ignore')
 
-    if len(raw_text) > max_bytes:
-        raw_text = raw_text[:max_bytes]
+    if len(raw_html) > max_bytes:
+        raw_html = raw_html[:max_bytes]
 
-    # Extract title for additional checking
-    title = extract_title(raw_text) if cfg["settings"].get("check_title", True) else ""
+    # Extract comprehensive text content
+    comprehensive_text, title, meta_desc, noscript = extract_comprehensive_text(raw_html)
 
-    # Normalize the full text content
-    text_normalized = normalize_text(
-        raw_text,
+    # Normalize the comprehensive text
+    comprehensive_normalized = normalize_text(
+        comprehensive_text,
         cfg["settings"].get("case_insensitive", True),
         cfg["settings"].get("normalize_whitespace", True),
     )
 
-    return text_normalized, title, content_type
+    return comprehensive_normalized, title, meta_desc, noscript, content_type
 
 def compile_regexes(regex_cfg: List[Dict[str, str]], case_insensitive_default: bool) -> List[Tuple[re.Pattern, str]]:
     """
@@ -171,24 +244,16 @@ def compile_regexes(regex_cfg: List[Dict[str, str]], case_insensitive_default: b
     return patterns
 
 def match_negative_keywords(
-    text_norm: str,
-    title: str,
+    comprehensive_text: str,
     plain_keywords: List[str],
     regex_patterns: List[Tuple[re.Pattern, str]],
     case_insensitive: bool
 ) -> List[str]:
     """
-    NEGATIVE DETECTION: Find failure indicators in content.
-
-    Checks both main content and title for comprehensive detection.
-    Handles various keyword expressions and regex patterns.
+    NEGATIVE DETECTION: Find failure indicators in comprehensive content.
+    Checks the combined text from all sources.
     """
     matched = []
-
-    # Prepare title for checking
-    title_norm = ""
-    if title:
-        title_norm = normalize_text(title, case_insensitive, True)
 
     # Check plain text keywords
     for keyword in plain_keywords:
@@ -197,50 +262,74 @@ def match_negative_keywords(
 
         keyword_norm = keyword.lower() if case_insensitive else keyword
 
-        # Check in main content
-        if keyword_norm in text_norm:
-            matched.append(f"CONTENT:{keyword}")
-            continue
-
-        # Check in title
-        if title_norm and keyword_norm in title_norm:
-            matched.append(f"TITLE:{keyword}")
+        if keyword_norm in comprehensive_text:
+            matched.append(f"KEYWORD:{keyword}")
 
     # Check regex patterns
     for pattern, pattern_str in regex_patterns:
-        # Check main content
-        if pattern.search(text_norm):
-            matched.append(f"REGEX_CONTENT:{pattern_str}")
-            continue
-
-        # Check title
-        if title_norm and pattern.search(title_norm):
-            matched.append(f"REGEX_TITLE:{pattern_str}")
+        if pattern.search(comprehensive_text):
+            matched.append(f"REGEX:{pattern_str}")
 
     return matched
 
+def perform_content_probe(comprehensive_text: str, title: str, min_length: int) -> Tuple[bool, List[str]]:
+    """
+    Perform comprehensive content probes to detect incomplete/error pages.
+    Returns: (is_healthy, issues_found)
+    """
+    issues = []
+
+    # Text length probe
+    if len(comprehensive_text) < min_length:
+        issues.append(f"SHORT_CONTENT:{len(comprehensive_text)}")
+
+    # Title probe
+    if not title or len(title.strip()) == 0:
+        issues.append("NO_TITLE")
+
+    # Basic structure probe - check for common HTML elements
+    if comprehensive_text:
+        # Very basic check - if we have some reasonable amount of text, consider it structured
+        word_count = len(comprehensive_text.split())
+        if word_count < 10:
+            issues.append(f"FEW_WORDS:{word_count}")
+
+    # JavaScript error probe
+    js_error_patterns = [
+        r"javascript\s*error",
+        r"uncaught\s*exception",
+        r"syntax\s*error",
+        r"reference\s*error"
+    ]
+
+    for pattern in js_error_patterns:
+        if re.search(pattern, comprehensive_text, re.IGNORECASE):
+            issues.append(f"JS_ERROR:{pattern}")
+
+    return len(issues) == 0, issues
+
 def sha256_of_text(s: str) -> str:
     """Generate SHA256 hash of text content for integrity verification"""
-    return hashlib.sha256(s.encode("utf-8", errors="ignore")).hexdigest()[:16]  # Shortened for readability
+    return hashlib.sha256(s.encode("utf-8", errors="ignore")).hexdigest()[:16]
 
 def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     Perform comprehensive health check on a single URL.
 
-    Returns detailed status information including matched keywords,
-    response metadata, and content analysis.
+    Logic: HTTP 200 + no negative keywords + sufficient content + probes pass → Healthy
+           Everything else → Unhealthy
     """
     failure_keywords_global = cfg.get("global_keywords", [])
     settings = cfg["settings"]
 
     case_insensitive = settings.get("case_insensitive", True)
-    max_bytes = settings.get("max_bytes_to_scan", 3_000_000)
+    max_bytes = settings.get("max_bytes_to_scan", 3000000)
     timeout = settings.get("timeout_seconds", 8)
     retries = settings.get("retries", 1)
     user_agent = settings.get("user_agent", "healthcheck-bot/1.0")
-    text_mime_only = settings.get("text_mime_only", True)
+    min_text_length = settings.get("min_text_length", 100)
 
-    # Use UTC timestamp as requested
+    # Use UTC timestamp
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     parsed = urlparse(url)
     domain = extract_domain(parsed.hostname or "")
@@ -249,7 +338,8 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         "User-Agent": user_agent,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate"
+        "Accept-Encoding": "gzip, deflate",
+        "Accept-Charset": "utf-8, iso-8859-1;q=0.5"
     }
 
     last_exception = None
@@ -261,9 +351,9 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
             status_code = response.status_code
             response_time_ms = int(response.elapsed.total_seconds() * 1000)
 
-            # Check MIME type for text content (addresses JS rendering issues)
+            # Check MIME type for text content
             content_type = response.headers.get("Content-Type", "").lower()
-            if text_mime_only and not any(mime in content_type for mime in ["text/", "application/json", "application/xml"]):
+            if not any(mime in content_type for mime in ["text/", "application/json", "application/xml"]):
                 return {
                     "timestamp": timestamp,
                     "url": url,
@@ -278,25 +368,32 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
                     "error": "Non-text content type"
                 }
 
-            # Extract and normalize content
-            text_normalized, title, content_type = get_text_and_meta(response, max_bytes, cfg)
-            content_hash = sha256_of_text(text_normalized)
+            # Extract comprehensive content
+            comprehensive_text, title, meta_desc, noscript, content_type = get_comprehensive_content(response, max_bytes, cfg)
+            content_hash = sha256_of_text(comprehensive_text)
 
-            # Simplified logic: HTTP 200 + no keywords → Healthy, everything else → Unhealthy
+            # Health determination logic
             if status_code != 200:
                 result = "Unhealthy"
                 matched_keywords = [f"HTTP_{status_code}"]
             else:
-                # Comprehensive keyword matching for HTTP 200 responses
+                # Check negative keywords in comprehensive text
                 domain_keywords = pick_domain_keywords(cfg, domain)
                 all_plain_keywords = domain_keywords + failure_keywords_global
                 regex_patterns = compile_regexes(cfg.get("regex_keywords", []), case_insensitive)
 
                 matched_keywords = match_negative_keywords(
-                    text_normalized, title, all_plain_keywords, regex_patterns, case_insensitive
+                    comprehensive_text, all_plain_keywords, regex_patterns, case_insensitive
                 )
 
-                result = "Unhealthy" if matched_keywords else "Healthy"
+                # Perform content probes
+                probe_healthy, probe_issues = perform_content_probe(comprehensive_text, title, min_text_length)
+
+                if not probe_healthy:
+                    matched_keywords.extend(probe_issues)
+
+                # Final determination: Healthy only if no keywords matched AND probes passed
+                result = "Healthy" if (not matched_keywords and probe_healthy) else "Unhealthy"
 
             return {
                 "timestamp": timestamp,
@@ -321,7 +418,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as e:
             last_exception = f"Unexpected error: {str(e)}"
 
-    # All retries failed - treat as Unhealthy with N/A status code
+    # All retries failed - always Unhealthy
     return {
         "timestamp": timestamp,
         "url": url,
@@ -339,9 +436,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
 def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "health_check_ultimate.csv") -> List[Dict[str, Any]]:
     """
     Check multiple URLs and save comprehensive results to CSV.
-
-    Provides detailed analysis including keyword matches, content hashes,
-    and response metadata for thorough monitoring.
+    Only reports Healthy/Unhealthy states - no other status values.
     """
     cfg = load_keywords(cfg_path)
 
@@ -352,9 +447,10 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
     results = []
     total_urls = len(unique_urls)
 
-    print(f"Starting health check for {total_urls} URLs...")
+    print(f"Starting enhanced health check for {total_urls} URLs...")
     print(f"Configuration: {cfg_path}")
-    print("-" * 60)
+    print("Enhanced features: comprehensive text analysis, content probes, UTF-8 priority")
+    print("-" * 70)
 
     for i, url in enumerate(unique_urls, 1):
         print(f"[{i:2d}/{total_urls}] Checking: {url}")
@@ -362,20 +458,18 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
         result = health_check_url(url, cfg)
         results.append(result)
 
-        # Status display
-        status_icon = {
-            "Healthy": "[OK]",
-            "Unhealthy": "[FAIL]"
-        }.get(result['result'], "[UNKNOWN]")
+        # Status display - only Healthy/Unhealthy
+        status_icon = "✓ [OK]" if result['result'] == "Healthy" else "✗ [FAIL]"
 
         print(f"   {status_icon} {result['result']} (HTTP: {result['status_code']}) "
               f"[{result['response_time_ms']}ms]")
 
         if result['matched_keywords']:
-            print(f"   Keywords: {result['matched_keywords']}")
+            keywords_preview = result['matched_keywords'][:80] + "..." if len(result['matched_keywords']) > 80 else result['matched_keywords']
+            print(f"   Issues: {keywords_preview}")
 
         if result['title']:
-            title_preview = result['title'][:50] + "..." if len(result['title']) > 50 else result['title']
+            title_preview = result['title'][:60] + "..." if len(result['title']) > 60 else result['title']
             print(f"   Title: {title_preview}")
 
     # Save detailed results to CSV
@@ -390,16 +484,16 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
         writer.writeheader()
         writer.writerows(results)
 
-    # Summary statistics
+    # Summary statistics - only Healthy/Unhealthy
     healthy = sum(1 for r in results if r['result'] == 'Healthy')
     unhealthy = sum(1 for r in results if r['result'] == 'Unhealthy')
 
-    print("-" * 60)
+    print("-" * 70)
     print(f"Results Summary:")
-    print(f"   Healthy: {healthy}")
-    print(f"   Unhealthy: {unhealthy}")
-    print(f"   Total: {len(results)}")
-    print(f"   Saved to: {csv_filename}")
+    print(f"   ✓ Healthy: {healthy}")
+    print(f"   ✗ Unhealthy: {unhealthy}")
+    print(f"   📊 Total: {len(results)}")
+    print(f"   💾 Saved to: {csv_filename}")
 
     return results
 
