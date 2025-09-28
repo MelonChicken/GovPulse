@@ -5,7 +5,7 @@ body{font-family:sans-serif;margin:24px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
 .card{border:1px solid #ddd;border-radius:10px;padding:12px}
 .badge{padding:2px 8px;border-radius:999px;font-size:12px}
-.ok{background:#e6ffec}.unstable{background:#fff8e1}.unhealthy{background:#ffebe6}.err{background:#ffe6e6}.skip{background:#f2f2f2}.dis{background:#eee}
+.ok{background:#e6ffec}.unhealthy{background:#fff8e1}.err{background:#ffebe6}.dis{background:#eee}
 .keyword-info{background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:8px;margin-top:8px;font-size:11px;color:#495057}
 .status-detail{margin-top:6px;font-size:11px;color:#6c757d}
 .url{color:#555;font-size:12px;word-break:break-all}
@@ -22,14 +22,12 @@ async function run(){
   document.getElementById('ts').textContent = 'Last update: '+ new Date().toLocaleString();
   const grid = document.getElementById('grid'); grid.innerHTML='';
   for (const x of data){
-    const outcome=(x.outcome||'').toUpperCase();
-    const cls= outcome==='OK'?'ok': (outcome==='UNSTABLE'?'unstable':(outcome==='UNHEALTHY'?'unhealthy':(outcome==='SKIPPED'?'skip':(outcome==='DISALLOWED'?'dis':'err'))));
+    const outcome=(x.outcome||'').toLowerCase();
+    const cls= outcome==='healthy'?'ok': (outcome==='unhealthy'?'unhealthy':(outcome==='disallowed'?'dis':'err'));
 
     // 상태 표현 개선
     let statusDisplay = outcome;
-    if (outcome === 'SKIPPED') {
-      statusDisplay = '체크 건너뜀 (Rate Limited)';
-    } else if (outcome === 'UNHEALTHY') {
+    if (outcome === 'unhealthy') {
       const keywords = x.matched_keywords || '';
       if (keywords.includes('CONTENT:') || keywords.includes('TITLE:')) {
         const keywordMatch = keywords.split(';')[0];
@@ -38,7 +36,7 @@ async function run(){
       } else {
         statusDisplay = `Unhealthy (HTTP ${x.http})`;
       }
-    } else if (outcome === 'DISALLOWED') {
+    } else if (outcome === 'disallowed') {
       statusDisplay = '로봇 차단 (robots.txt)';
     }
     const div=document.createElement('div'); div.className='card';
@@ -52,7 +50,6 @@ async function run(){
       <div class="meta">robots: ${x.robots||'-'}</div>
       ${x.title ? '<div class="meta">Title: ' + (x.title.length > 60 ? x.title.substring(0, 60) + '...' : x.title) + '</div>' : ''}
       <div style="color:#a33">${x.error?('err: '+x.error):''}</div>
-      ${x.skipped ? '<div class="status-detail">체크 건너뜀 (Rate Limited)<br>Last checked: '+(x.last_ts? new Date(x.last_ts*1000).toLocaleString(): '-')+'<br>Last result: HTTP '+(x.http||'-')+', '+(x.ttfb_ms||0)+'ms' + (x.last_outcome && x.last_outcome !== 'SKIPPED' ? ', status: '+x.last_outcome : '') + '</div>' : ''}
       ${x.matched_keywords && x.matched_keywords !== '' ? '<div class="keyword-info">키워드 매칭: ' + x.matched_keywords.split(';').map(k => k.includes(':') ? k.split(':')[1] : k).join(', ') + '</div>' : ''}
     `;
     grid.appendChild(div);

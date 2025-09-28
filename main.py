@@ -31,10 +31,8 @@ ENDPOINTS = []
 app_start_time = time.time()
 
 # In-memory caches (reset on restart)
-rate_limits = defaultdict(list)  # per endpoint
-host_rate_limits = defaultdict(list)  # per host
 robots_cache = {}  # robots.txt cache with expiry
-last_results = {}  # last successful results for SKIPPED UX
+last_results = {}  # last successful results cache
 host_semaphores = {}  # concurrency control per host
 
 def load_config():
@@ -138,34 +136,6 @@ async def check_robots_txt(url: str) -> bool:
         logger.warning(f"Error fetching robots.txt for {host}: {e}, allowing conservatively")
         return True
 
-def is_rate_limited(url: str, endpoint_name: str) -> bool:
-    """Check if URL/endpoint is rate limited"""
-    current_time = time.time()
-    parsed_url = urlparse(url)
-    host = parsed_url.netloc
-
-    # Clean old requests outside windows
-    host_rate_limits[host] = [
-        req_time for req_time in host_rate_limits[host]
-        if current_time - req_time < CONFIG['budgets']['per_host_min_interval_s']
-    ]
-
-    rate_limits[endpoint_name] = [
-        req_time for req_time in rate_limits[endpoint_name]
-        if current_time - req_time < CONFIG['budgets']['per_endpoint_min_interval_s']
-    ]
-
-    # Check rate limits
-    if len(host_rate_limits[host]) >= 1:  # 1 request per host interval
-        return True
-
-    if len(rate_limits[endpoint_name]) >= 1:  # 1 request per endpoint interval
-        return True
-
-    # Add current request to rate limits
-    host_rate_limits[host].append(current_time)
-    rate_limits[endpoint_name].append(current_time)
-    return False
 
 async def check_website(endpoint: Dict) -> Dict:
     """Check a single website and return monitoring data"""
@@ -229,13 +199,13 @@ async def check_website(endpoint: Dict) -> Dict:
 
                 # Determine outcome
                 if status == 200:
-                    outcome = "HEALTHY"
+                    outcome = "Healthy"
                 elif 400 <= status < 500:
-                    outcome = "CLIENT_ERROR"
+                    outcome = "Error"
                 elif 500 <= status:
-                    outcome = "SERVER_ERROR"
+                    outcome = "Error"
                 else:
-                    outcome = "UNSTABLE"
+                    outcome = "Unhealthy"
 
                 result = {
                     "name": name,
@@ -255,7 +225,7 @@ async def check_website(endpoint: Dict) -> Dict:
             "url": url,
             "http": None,
             "ttfb_ms": elapsed_ms,
-            "outcome": "TIMEOUT",
+            "outcome": "Error",
             "error": "Request timeout",
             "ts": datetime.now().isoformat(),
             "skipped": False
@@ -267,14 +237,14 @@ async def check_website(endpoint: Dict) -> Dict:
             "url": url,
             "http": None,
             "ttfb_ms": elapsed_ms,
-            "outcome": "UNSTABLE",
+            "outcome": "Error",
             "error": str(e),
             "ts": datetime.now().isoformat(),
             "skipped": False
         }
 
     # Cache successful results
-    if result['outcome'] in ['HEALTHY', 'CLIENT_ERROR', 'SERVER_ERROR']:
+    if result['outcome'] in ['Healthy', 'Error', 'Unhealthy']:
         last_results[url] = {
             'last_outcome': result['outcome'],
             'last_http': result['http'],
@@ -312,12 +282,9 @@ async def dashboard():
             .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
             .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
             .status { font-weight: bold; padding: 4px 8px; border-radius: 4px; }
-            .HEALTHY { background: #d4edda; color: #155724; }
-            .UNSTABLE { background: #fff3cd; color: #856404; }
-            .TIMEOUT { background: #f8d7da; color: #721c24; }
-            .CLIENT_ERROR { background: #f8d7da; color: #721c24; }
-            .SERVER_ERROR { background: #f8d7da; color: #721c24; }
-            .SKIPPED { background: #e2e3e5; color: #383d41; }
+            .Healthy { background: #d4edda; color: #155724; }
+            .Unhealthy { background: #fff3cd; color: #856404; }
+            .Error { background: #f8d7da; color: #721c24; }
             .DISALLOWED { background: #f8d7da; color: #721c24; }
             .metric { margin: 8px 0; }
             .url { color: #007bff; text-decoration: none; }
@@ -338,16 +305,6 @@ async def dashboard():
                     const data = await response.json();
 
                     const cardsHtml = data.map(site => {
-                        let lastResultHtml = '';
-                        if (site.skipped && site.last_outcome) {
-                            lastResultHtml = `
-                                <div class="last-result">
-                                    Last result: <span class="status ${site.last_outcome}">${site.last_outcome}</span>
-                                    (HTTP: ${site.last_http || 'N/A'}, TTFB: ${site.last_ttfb_ms}ms)
-                                    at ${new Date(site.last_ts).toLocaleString()}
-                                </div>
-                            `;
-                        }
 
                         return `
                             <div class="card">
@@ -356,7 +313,6 @@ async def dashboard():
                                 <div class="metric">HTTP: ${site.http || 'N/A'}</div>
                                 <div class="metric">TTFB: ${site.ttfb_ms}ms</div>
                                 ${site.error ? `<div class="metric">Error: ${site.error}</div>` : ''}
-                                ${lastResultHtml}
                                 <div class="timestamp">Last checked: ${new Date(site.ts).toLocaleString()}</div>
                             </div>
                         `;
@@ -385,42 +341,8 @@ async def snapshot():
     results = []
 
     for endpoint in ENDPOINTS:
-        url = endpoint['url']
-        name = endpoint['name']
-
-        if is_rate_limited(url, name):
-            # Return SKIPPED with last result if available
-            result = {
-                "name": name,
-                "url": url,
-                "http": None,
-                "ttfb_ms": 0,
-                "outcome": "SKIPPED",
-                "error": "Rate limited",
-                "ts": datetime.now().isoformat(),
-                "skipped": True
-            }
-
-            # Add last result if available
-            if url in last_results:
-                result.update(last_results[url])
-
-            results.append(result)
-
-            # Log skipped
-            logger.info(json.dumps({
-                "outcome": "SKIPPED",
-                "http": None,
-                "ttfb_ms": 0,
-                "elapsed_ms": 0,
-                "skipped": True,
-                "robots": False,
-                "host": urlparse(url).netloc,
-                "url": url
-            }))
-        else:
-            result = await check_website(endpoint)
-            results.append(result)
+        result = await check_website(endpoint)
+        results.append(result)
 
     return results
 
@@ -443,9 +365,7 @@ async def reload_config(x_reload_token: str = Header(None)):
 
     try:
         # Clear caches
-        global rate_limits, host_rate_limits, robots_cache, last_results, host_semaphores
-        rate_limits.clear()
-        host_rate_limits.clear()
+        global robots_cache, last_results, host_semaphores
         robots_cache.clear()
         last_results.clear()
         host_semaphores.clear()

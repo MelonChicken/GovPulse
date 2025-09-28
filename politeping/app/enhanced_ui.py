@@ -195,10 +195,6 @@ HTML = """<!doctype html>
             color: var(--color-error);
         }
 
-        .badge-skipped {
-            background-color: var(--color-bg-muted);
-            color: var(--color-muted);
-        }
 
         .badge-error {
             background-color: var(--color-bg-error);
@@ -543,9 +539,9 @@ HTML = """<!doctype html>
                 } else {
                     // Legacy format - count manually
                     const data = apiResponse.data || apiResponse;
-                    const healthy = data.filter(item => item.outcome === 'OK').length;
-                    const unhealthy = data.filter(item => item.outcome === 'UNHEALTHY').length;
-                    const errors = data.filter(item => ['ERROR', 'HTTP4xx', 'HTTP5xx'].includes(item.outcome)).length;
+                    const healthy = data.filter(item => item.outcome === 'Healthy').length;
+                    const unhealthy = data.filter(item => item.outcome === 'Unhealthy').length;
+                    const errors = data.filter(item => item.outcome === 'Error').length;
 
                     document.getElementById('healthyCount').textContent = healthy;
                     document.getElementById('unhealthyCount').textContent = unhealthy;
@@ -608,34 +604,24 @@ HTML = """<!doctype html>
             }
 
             getStatusInfo(item) {
-                const outcome = (item.outcome || '').toUpperCase();
+                const outcome = (item.outcome || '').toLowerCase();
 
                 switch (outcome) {
-                    case 'OK':
+                    case 'healthy':
                         return { statusText: 'Healthy', badgeClass: 'badge-healthy' };
-                    case 'UNHEALTHY':
+                    case 'unhealthy':
                         return { statusText: 'Unhealthy', badgeClass: 'badge-unhealthy' };
-                    case 'SKIPPED':
-                        return { statusText: '체크 건너뜀', badgeClass: 'badge-skipped' };
-                    case 'DISALLOWED':
+                    case 'disallowed':
                         return { statusText: '로봇 차단', badgeClass: 'badge-error' };
-                    case 'UNSTABLE':
-                        return { statusText: 'Unstable', badgeClass: 'badge-warning' };
-                    case 'HTTP4XX':
-                        return { statusText: 'HTTP 4xx', badgeClass: 'badge-error' };
-                    case 'HTTP5XX':
-                        return { statusText: 'HTTP 5xx', badgeClass: 'badge-error' };
                     default:
                         return { statusText: 'Error', badgeClass: 'badge-error' };
                 }
             }
 
             getDetailedStatus(item) {
-                const outcome = (item.outcome || '').toUpperCase();
+                const outcome = (item.outcome || '').toLowerCase();
 
-                if (outcome === 'SKIPPED') {
-                    return '체크 건너뜀 (요청 제한: Rate Limited)';
-                } else if (outcome === 'UNHEALTHY') {
+                if (outcome === 'unhealthy') {
                     const keywords = item.matched_keywords || '';
                     if (keywords.includes('CONTENT:') || keywords.includes('TITLE:')) {
                         const keywordMatch = keywords.split(';')[0];
@@ -643,16 +629,10 @@ HTML = """<!doctype html>
                         return `Unhealthy (HTTP ${item.http}, keyword="${keywordText}")`;
                     }
                     return `Unhealthy (HTTP ${item.http})`;
-                } else if (outcome === 'DISALLOWED') {
+                } else if (outcome === 'disallowed') {
                     return '로봇 차단 (robots.txt 정책)';
-                } else if (outcome === 'UNSTABLE') {
-                    return `Unstable (응답 지연: ${item.ttfb_ms}ms)`;
-                } else if (outcome === 'HTTP4XX') {
-                    return `HTTP 4xx 오류 (클라이언트 오류: ${item.http})`;
-                } else if (outcome === 'HTTP5XX') {
-                    return `HTTP 5xx 오류 (서버 오류: ${item.http})`;
-                } else if (outcome === 'ERROR') {
-                    return '연결 오류 (네트워크 또는 DNS 문제)';
+                } else if (outcome === 'error') {
+                    return '오류 (네트워크 또는 서버 문제)';
                 }
 
                 return item.outcome || 'Unknown';
@@ -661,11 +641,7 @@ HTML = """<!doctype html>
             getLastResult(item) {
                 const parts = [];
 
-                if (item.outcome === 'SKIPPED' && item.last_outcome) {
-                    parts.push(item.last_outcome);
-                } else {
-                    parts.push(item.outcome || 'Unknown');
-                }
+                parts.push(item.outcome || 'Unknown');
 
                 if (item.http) {
                     parts.push(`HTTP ${item.http}`);

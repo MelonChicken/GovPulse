@@ -239,19 +239,9 @@ class Checker:
             return {"name": ep["name"], "url": ep["url"], "http": None, "ttfb_ms": 0,
                     "outcome": "DISALLOWED", "error": None, "ts": time.time(), "robots": "parsed"}
 
-        if not self.rate.allowed_now(h, ep_key, settings.HOST_MIN_INTERVAL_S, settings.EP_MIN_INTERVAL_S):
-            prev = self.last_result.get(ep_key, {})
-            return {
-                "name": ep["name"], "url": ep["url"], "outcome": "SKIPPED", "skipped": True,
-                "http": prev.get("http"), "ttfb_ms": prev.get("ttfb_ms", 0),
-                "last_outcome": prev.get("outcome"), "last_ts": prev.get("ts"),
-                "ts": time.time(), "robots": "allow"
-            }
-
         async with self.rate.global_sem, self.rate.host_sems[h]:
             await asyncio.sleep(0.2)
             code, ttfb, err = await self._head_or_firstbyte(client, ep["url"], decision or "allow")
-            self.rate.mark(h, ep_key)
 
         ttfb_ms = round(ttfb * 1000, 1)
 
@@ -271,14 +261,14 @@ class Checker:
         # 결과 판정
         if code and 200 <= code < 400:
             if matched_keywords:
-                outcome = "UNHEALTHY"
+                outcome = "Unhealthy"
             else:
-                outcome = "OK" if ttfb <= settings.TTFB_SLA_S else "UNSTABLE"
+                outcome = "Healthy"
         elif code:
-            outcome = "HTTP5xx" if code >= 500 else "HTTP4xx"
+            outcome = "Error"
             matched_keywords = [f"HTTP_{code}"]
         else:
-            outcome = "ERROR"
+            outcome = "Error"
             matched_keywords = ["CONNECTION_ERROR"]
 
         res = {"name": ep["name"], "url": ep["url"], "http": code, "ttfb_ms": ttfb_ms,
