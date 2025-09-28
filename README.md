@@ -1,6 +1,6 @@
 # Government Website Status Monitor
 
-정부 웹사이트(.go.kr) 상태를 **저부하**로 모니터링하는 다양한 구현체와 도구
+정부 웹사이트(.go.kr) 상태를 **저부하**로 모니터링하는 FastAPI 기반 도구
 
 ## 🔀 프로젝트 구성
 
@@ -8,15 +8,11 @@
 - **파일**: `main.py`, `endpoints.yaml`
 - **용도**: 빠른 테스트 및 개발
 
-### 2. ⚡ Firebase Functions 버전 (서버리스)
-- **디렉토리**: `functions/`
-- **용도**: 프로덕션 서버리스 배포
-
-### 3. 🏭 프로덕션 FastAPI + Caddy 버전
+### 2. 🏭 프로덕션 FastAPI + Caddy 버전
 - **디렉토리**: `politeping/`
 - **용도**: HTTPS 자동 인증서, systemd 서비스
 
-### 4. 🔍 헬스체크 스크립트
+### 3. 🔍 헬스체크 스크립트
 - **파일**: `healthcheck.py`, `healthcheck_enhanced.py`
 - **용도**: 오프라인 일괄 상태 검사
 
@@ -37,7 +33,6 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 ```
 
 ### 3. 프로덕션 배포
-- **Firebase Functions**: `functions/README.md` 참조
 - **FastAPI + Caddy**: `politeping/README.md` 참조
 
 ## 📊 구현체별 특징
@@ -45,8 +40,7 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 | 구성요소 | 용도 | 주요 기능 |
 |---------|------|-----------|
 | **기본 FastAPI** | 개발/테스트 | robots.txt 가드, 레이트 제한, 실시간 웹 모니터링 |
-| **Firebase Functions** | 서버리스 프로덕션 | 자동 스케일링, 관리 불필요, 저비용 |
-| **FastAPI + Caddy** | 온프레미스 프로덕션 | HTTPS 자동화, systemd 서비스, 고성능 |
+| **FastAPI + Caddy** | 프로덕션 배포 | HTTPS 자동화, systemd 서비스, 고성능 |
 | **헬스체크 스크립트** | 오프라인 검사 | 일괄 처리, CSV 출력, 키워드 감지 |
 
 ## 🎯 사용 시나리오
@@ -59,13 +53,9 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 - **사용**: 헬스체크 스크립트 (`healthcheck.py`)
 - **장점**: cron 스케줄링, 상세한 로그, CSV 분석
 
-### ☁️ 서버리스 운영
-- **사용**: Firebase Functions (`functions/`)
-- **장점**: 무료 할당량, 자동 스케일링, 유지보수 최소
-
-### 🏢 엔터프라이즈 배포
+### 🏢 프로덕션 배포
 - **사용**: FastAPI + Caddy (`politeping/`)
-- **장점**: 고성능, 완전한 제어, 커스터마이징
+- **장점**: HTTPS 자동화, 고성능, systemd 관리, 완전한 제어
 
 ## 🔒 공통 법적 준수사항
 
@@ -89,7 +79,6 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 | 구성요소 | 문서 위치 | 설명 |
 |---------|-----------|------|
 | 기본 FastAPI | `main.py` 코드 참조 | 단일 파일 구현 |
-| Firebase Functions | `functions/README.md` | 서버리스 배포 가이드 |
 | 프로덕션 FastAPI + Caddy | `politeping/README.md` | 전체 스택 배포 |
 | 헬스체크 스크립트 | `healthcheck_usage.md` | 오프라인 모니터링 |
 
