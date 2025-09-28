@@ -65,8 +65,7 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 - **공개 페이지만**: 인증 불필요한 대표 페이지만
 - **robots.txt 완전 준수**: Disallow 경로는 요청 안 함
 - **저부하**: 도메인당 1분, 엔드포인트당 10분 간격
-- **최소 요청**: HEAD 우선, 필요시 GET 첫 청크만
-- **연락처 공개**: User-Agent에 실제 연락처 포함
+- **최소 요청**: HEAD 우선, 필요시 GET 첫 청크
 
 ### ❌ 금지 사항
 - 비공개 경로 접근 (`/admin`, `/login` 등)
