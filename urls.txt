@@ -1,0 +1,12 @@
+# Government websites for health checking
+https://www.law.go.kr/
+https://www.gov.kr/
+https://www.k-eta.go.kr/
+https://www.e-arrivalcard.go.kr/
+https://www.epost.go.kr/
+https://www.data.go.kr/
+
+# Test URLs for different scenarios
+https://httpbin.org/status/200
+https://httpbin.org/status/500
+https://httpbin.org/delay/2

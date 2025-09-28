@@ -1,0 +1,51 @@
+{
+  "global_keywords": [
+    "시스템 점검",
+    "서비스 중단",
+    "불편을 드려 죄송",
+    "화재",
+    "maintenance",
+    "temporarily unavailable",
+    "under construction",
+    "service unavailable"
+  ],
+  "domains": {
+    "www.law.go.kr": [
+      "법령 서비스 중단",
+      "데이터베이스 점검",
+      "법령정보 업데이트"
+    ],
+    "www.gov.kr": [
+      "정부24 점검",
+      "민원 서비스 중단"
+    ],
+    "*.go.kr": [
+      "정부 시스템 점검",
+      "공공서비스 일시 중단",
+      "전산 장애",
+      "네트워크 점검"
+    ],
+    "httpbin.org": [
+      "test maintenance",
+      "demo service down"
+    ]
+  },
+  "regex_keywords": [
+    {
+      "pattern": "점검.*중",
+      "flags": "i"
+    },
+    {
+      "pattern": "service.*down",
+      "flags": "i"
+    },
+    {
+      "pattern": "temporarily.*unavailable",
+      "flags": "i"
+    },
+    {
+      "pattern": "시스템.*장애",
+      "flags": "i"
+    }
+  ]
+}
