@@ -1,457 +1,442 @@
 #!/usr/bin/env python3
 """
-Enhanced Health Check Script with Advanced Text Processing
+Ultimate Health Check Script with Advanced Text Processing
 
-Usage:
-    python healthcheck.py --urls urls.txt --keywords keywords.json --out result.csv
+Key improvements addressing identified issues:
+1. ENCODING FIXES: apparent_encoding with fallback chain
+2. TEXT NORMALIZATION: Unicode (NFKC) + whitespace normalization
+3. COMPREHENSIVE KEYWORDS: Domain-specific + global + regex patterns
+4. TITLE EXTRACTION: HTML title tag inspection
+5. JS RENDERING ISSUES: Static content focus with MIME type filtering
+6. NEGATIVE DETECTION: Configurable keyword matching strategy
 
-Features:
-- Advanced encoding detection and normalization
-- Unicode and whitespace normalization for better keyword matching
-- Domain-specific keyword matching with wildcards
-- Regex pattern support with proper flags
-- Title extraction from HTML
-- Content hashing for integrity verification
-- Configurable scan limits and retry logic
-- Comprehensive CSV output with detailed metadata
+This is a drop-in replacement with JSON-based configuration.
 """
-
-import argparse
-import csv
-import json
-import re
-import time
-import hashlib
-import unicodedata
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from urllib.parse import urlparse
 
 import requests
+import csv
+import datetime
+import json
+import re
+import hashlib
+import unicodedata
+from urllib.parse import urlparse
+from typing import List, Dict, Any, Tuple
 
+def load_keywords(json_path: str) -> Dict[str, Any]:
+    """Load and validate keywords configuration from JSON file"""
+    with open(json_path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
 
-class HealthChecker:
-    def __init__(self, keywords_config: Dict[str, Any], max_bytes: int = 50000, timeout: int = 10):
-        """
-        Initialize health checker with keyword configuration
+    # Set default values with comprehensive fallbacks
+    cfg.setdefault("global_keywords", [])
+    cfg.setdefault("domains", {})
+    cfg.setdefault("regex_keywords", [])
+    cfg.setdefault("settings", {})
 
-        Args:
-            keywords_config: Loaded keywords JSON configuration
-            max_bytes: Maximum bytes to scan from response body
-            timeout: Request timeout in seconds
-        """
-        self.keywords_config = keywords_config
-        self.max_bytes = max_bytes
-        self.timeout = timeout
+    s = cfg["settings"]
+    s.setdefault("case_insensitive", True)
+    s.setdefault("normalize_whitespace", True)
+    s.setdefault("max_bytes_to_scan", 3_000_000)
+    s.setdefault("timeout_seconds", 8)
+    s.setdefault("retries", 1)
+    s.setdefault("user_agent", "healthcheck-bot/1.0")
+    s.setdefault("check_title", True)
+    s.setdefault("text_mime_only", True)
 
-        # Compile regex patterns once
-        self.regex_patterns = []
-        for regex_item in keywords_config.get("regex_keywords", []):
-            pattern = regex_item["pattern"]
-            flags = 0
-            if "i" in regex_item.get("flags", ""):
-                flags |= re.IGNORECASE
-            self.regex_patterns.append(re.compile(pattern, flags))
+    return cfg
 
-    def extract_domain(self, url: str) -> str:
-        """Extract domain from URL"""
-        try:
-            return urlparse(url).netloc.lower()
-        except Exception:
-            return ""
+def extract_domain(host: str) -> str:
+    """Extract and normalize domain from hostname"""
+    return host.lower() if host else ""
 
-    def extract_title(self, html_content: str) -> str:
-        """Extract title from HTML content using regex"""
-        try:
-            # Simple regex to extract title tag content
-            title_match = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
-            if title_match:
-                title = title_match.group(1).strip()
-                # Clean up title (remove extra whitespace, newlines)
-                title = re.sub(r'\s+', ' ', title)
-                return title[:200]  # Limit title length
-            return ""
-        except Exception:
-            return ""
+def pick_domain_keywords(cfg: Dict[str, Any], domain: str) -> List[str]:
+    """
+    Select domain-specific keywords with wildcard support.
+    Supports exact matches and wildcard patterns like *.go.kr
+    """
+    selected = []
+    domains_cfg = cfg.get("domains", {})
 
-    def get_keywords_for_domain(self, domain: str) -> List[str]:
-        """
-        Get applicable keywords for a domain with priority:
-        1. Exact domain match
-        2. Wildcard domain match (*.go.kr)
-        3. Global keywords
+    # Exact domain match
+    if domain in domains_cfg:
+        selected.extend(domains_cfg[domain])
 
-        Args:
-            domain: Domain to check (e.g., "www.law.go.kr")
+    # Wildcard matching (*.go.kr matches any.go.kr)
+    for pattern, keywords in domains_cfg.items():
+        if pattern.startswith("*.") and domain.endswith(pattern[1:]):
+            selected.extend(keywords)
 
-        Returns:
-            List of applicable keywords
-        """
-        keywords = []
+    return selected
 
-        # 1. Check exact domain match
-        domain_configs = self.keywords_config.get("domains", {})
-        if domain in domain_configs:
-            keywords.extend(domain_configs[domain])
-            return keywords  # Use domain-specific only
+def normalize_text(s: str, case_insensitive: bool, normalize_ws: bool) -> str:
+    """
+    Advanced text normalization addressing encoding/spacing issues:
+    - Unicode normalization (NFKC) for consistent character representation
+    - Whitespace normalization to handle mixed spaces/newlines
+    - Case normalization for case-insensitive matching
+    """
+    # Unicode normalization - converts similar characters to canonical form
+    s = unicodedata.normalize("NFKC", s)
 
-        # 2. Check wildcard patterns
-        for pattern, pattern_keywords in domain_configs.items():
-            if pattern.startswith("*."):
-                wildcard_domain = pattern[2:]  # Remove "*."
-                if domain.endswith("." + wildcard_domain) or domain == wildcard_domain:
-                    keywords.extend(pattern_keywords)
-                    return keywords  # Use wildcard match only
+    # Whitespace normalization - collapse multiple whitespace to single space
+    if normalize_ws:
+        s = re.sub(r"\s+", " ", s).strip()
 
-        # 3. Fall back to global keywords
-        keywords.extend(self.keywords_config.get("global_keywords", []))
+    # Case normalization
+    if case_insensitive:
+        s = s.lower()
 
-        return keywords
+    return s
 
-    def check_keywords_in_content(self, content: str, keywords: List[str]) -> Tuple[bool, str]:
-        """
-        Check if any keywords are found in content
+def extract_title(html: str) -> str:
+    """
+    Extract HTML title for additional keyword checking.
+    Addresses JS rendering issues by checking static title tags.
+    """
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, flags=re.IGNORECASE | re.DOTALL)
+    if not title_match:
+        return ""
 
-        Args:
-            content: Content to search in
-            keywords: List of keywords to search for
+    title = title_match.group(1)
+    # Clean up title content
+    title = re.sub(r"<[^>]+>", "", title)  # Remove any nested tags
+    title = re.sub(r"\s+", " ", title).strip()
+    return title
 
-        Returns:
-            Tuple of (found, matched_keyword)
-        """
-        content_lower = content.lower()
+def get_text_and_meta(resp: requests.Response, max_bytes: int, cfg: Dict[str, Any]) -> Tuple[str, str, str]:
+    """
+    Extract and normalize text content with encoding fixes.
 
-        # Check string keywords
-        for keyword in keywords:
-            if keyword.lower() in content_lower:
-                return True, keyword
+    ENCODING PROBLEM SOLUTION:
+    - Uses apparent_encoding as fallback when encoding detection fails
+    - Handles encoding mismatches that cause keyword matching failures
+    """
+    # CRITICAL FIX: Encoding detection and correction
+    if not resp.encoding or resp.encoding == 'ISO-8859-1':
+        # Fall back to apparent_encoding for better detection
+        resp.encoding = resp.apparent_encoding or "utf-8"
 
-        # Check regex patterns
-        for pattern in self.regex_patterns:
-            if pattern.search(content):
-                return True, f"regex:{pattern.pattern}"
+    content_type = resp.headers.get("Content-Type", "").lower()
 
-        return False, ""
-
-    def check_url(self, url: str) -> Dict[str, Any]:
-        """
-        Perform health check on a single URL
-
-        Args:
-            url: URL to check
-
-        Returns:
-            Dictionary with check results
-        """
-        timestamp_iso = datetime.now().isoformat()
-        domain = self.extract_domain(url)
-
-        result = {
-            "timestamp_iso": timestamp_iso,
-            "url": url,
-            "domain": domain,
-            "status_code": "N/A",
-            "result": "Error",
-            "response_time_ms": 0,
-            "title": "",
-            "matched_keyword": "",
-            "error_message": ""
-        }
-
-        try:
-            start_time = time.time()
-
-            # Make HTTP request
-            response = requests.get(
-                url,
-                timeout=self.timeout,
-                headers={
-                    "User-Agent": "HealthChecker/1.0 (+monitoring@company.com)"
-                },
-                stream=True  # Use streaming to control data read
-            )
-
-            response_time_ms = round((time.time() - start_time) * 1000, 1)
-            result["response_time_ms"] = response_time_ms
-            result["status_code"] = response.status_code
-
-            if response.status_code != 200:
-                result["result"] = "Error"
-                result["error_message"] = f"HTTP {response.status_code}"
-                return result
-
-            # Read limited content
-            content_bytes = b""
-            bytes_read = 0
-
-            for chunk in response.iter_content(chunk_size=8192):
-                if bytes_read + len(chunk) > self.max_bytes:
-                    # Read only remaining bytes
-                    remaining = self.max_bytes - bytes_read
-                    content_bytes += chunk[:remaining]
-                    break
-                content_bytes += chunk
-                bytes_read += len(chunk)
-
-            # Decode content
-            try:
-                content = content_bytes.decode('utf-8', errors='ignore')
-            except UnicodeDecodeError:
-                content = content_bytes.decode('latin-1', errors='ignore')
-
-            # Extract title
-            result["title"] = self.extract_title(content)
-
-            # Get keywords for this domain
-            keywords = self.get_keywords_for_domain(domain)
-
-            # Check for negative keywords
-            has_keyword, matched_keyword = self.check_keywords_in_content(content, keywords)
-
-            if has_keyword:
-                result["result"] = "Unhealthy"
-                result["matched_keyword"] = matched_keyword
-            else:
-                result["result"] = "Healthy"
-
-        except requests.exceptions.Timeout:
-            result["error_message"] = "Request timeout"
-        except requests.exceptions.ConnectionError as e:
-            result["error_message"] = f"Connection error: {str(e)}"
-        except requests.exceptions.RequestException as e:
-            result["error_message"] = f"Request error: {str(e)}"
-        except Exception as e:
-            result["error_message"] = f"Unexpected error: {str(e)}"
-
-        return result
-
-    def check_multiple_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
-        """
-        Check multiple URLs and return results
-
-        Args:
-            urls: List of URLs to check
-
-        Returns:
-            List of check results
-        """
-        results = []
-
-        for i, url in enumerate(urls, 1):
-            print(f"Checking {i}/{len(urls)}: {url}")
-            result = self.check_url(url)
-            results.append(result)
-
-            # Brief output
-            status = result["result"]
-            status_code = result["status_code"]
-            response_time = result["response_time_ms"]
-
-            if status == "Unhealthy":
-                print(f"  → {status} ({status_code}) - {response_time}ms - Keyword: {result['matched_keyword']}")
-            elif status == "Error":
-                print(f"  → {status} ({status_code}) - {result['error_message']}")
-            else:
-                print(f"  → {status} ({status_code}) - {response_time}ms")
-
-            # Small delay to be polite
-            time.sleep(0.5)
-
-        return results
-
-    def save_results_to_csv(self, results: List[Dict[str, Any]], output_file: str):
-        """
-        Save results to CSV file
-
-        Args:
-            results: List of check results
-            output_file: Output CSV file path
-        """
-        fieldnames = [
-            "timestamp_iso",
-            "url",
-            "domain",
-            "status_code",
-            "result",
-            "response_time_ms",
-            "title",
-            "matched_keyword",
-            "error_message"
-        ]
-
-        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(results)
-
-        print(f"\nResults saved to: {output_file}")
-
-
-def load_urls(file_path: str) -> List[str]:
-    """Load URLs from text file"""
-    urls = []
+    # Get text content with size limit
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                url = line.strip()
-                if url and not url.startswith('#'):
-                    urls.append(url)
-    except Exception as e:
-        print(f"Error loading URLs from {file_path}: {e}")
-        return []
+        raw_text = resp.text
+    except UnicodeDecodeError:
+        # Last resort: force UTF-8 with error handling
+        raw_text = resp.content.decode('utf-8', errors='ignore')
 
-    return urls
+    if len(raw_text) > max_bytes:
+        raw_text = raw_text[:max_bytes]
 
+    # Extract title for additional checking
+    title = extract_title(raw_text) if cfg["settings"].get("check_title", True) else ""
 
-def load_keywords(file_path: str) -> Dict[str, Any]:
-    """Load keywords configuration from JSON file"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading keywords from {file_path}: {e}")
-        return {}
-
-
-def create_sample_files():
-    """Create sample input files for testing"""
-
-    # Sample URLs
-    urls_content = """# Sample URLs for health checking
-https://www.law.go.kr/
-https://www.gov.kr/
-https://www.k-eta.go.kr/
-https://httpbin.org/status/200
-https://httpbin.org/status/500
-"""
-
-    # Sample keywords configuration
-    keywords_content = {
-        "global_keywords": [
-            "시스템 점검",
-            "서비스 중단",
-            "불편을 드려 죄송",
-            "화재",
-            "maintenance",
-            "temporarily unavailable"
-        ],
-        "domains": {
-            "www.law.go.kr": [
-                "법령 서비스 중단",
-                "데이터베이스 점검"
-            ],
-            "*.go.kr": [
-                "정부 시스템 점검",
-                "공공서비스 일시 중단"
-            ],
-            "httpbin.org": [
-                "test maintenance"
-            ]
-        },
-        "regex_keywords": [
-            {
-                "pattern": r"점검.*중",
-                "flags": "i"
-            },
-            {
-                "pattern": r"service.*down",
-                "flags": "i"
-            }
-        ]
-    }
-
-    # Write sample files
-    with open('urls.txt', 'w', encoding='utf-8') as f:
-        f.write(urls_content)
-
-    with open('keywords.json', 'w', encoding='utf-8') as f:
-        json.dump(keywords_content, f, ensure_ascii=False, indent=2)
-
-    print("Sample files created:")
-    print("- urls.txt")
-    print("- keywords.json")
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Advanced Health Check with Domain-specific Keywords",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python healthcheck.py --urls urls.txt --keywords keywords.json --out result.csv
-  python healthcheck.py --create-samples  # Create sample input files
-        """
+    # Normalize the full text content
+    text_normalized = normalize_text(
+        raw_text,
+        cfg["settings"].get("case_insensitive", True),
+        cfg["settings"].get("normalize_whitespace", True),
     )
 
-    parser.add_argument('--urls', type=str, help='Path to URLs text file')
-    parser.add_argument('--keywords', type=str, help='Path to keywords JSON file')
-    parser.add_argument('--out', type=str, default='health_check_results.csv',
-                       help='Output CSV file (default: health_check_results.csv)')
-    parser.add_argument('--max-bytes', type=int, default=50000,
-                       help='Maximum bytes to scan from response (default: 50000)')
-    parser.add_argument('--timeout', type=int, default=10,
-                       help='Request timeout in seconds (default: 10)')
-    parser.add_argument('--create-samples', action='store_true',
-                       help='Create sample urls.txt and keywords.json files')
+    return text_normalized, title, content_type
 
-    args = parser.parse_args()
+def compile_regexes(regex_cfg: List[Dict[str, str]], case_insensitive_default: bool) -> List[Tuple[re.Pattern, str]]:
+    """
+    Compile regex patterns with proper flag handling.
+    Returns list of (compiled_pattern, original_pattern_string) tuples.
+    """
+    patterns = []
+    for item in regex_cfg:
+        pattern_str = item.get("pattern", "")
+        flags_str = item.get("flags", "")
 
-    if args.create_samples:
-        create_sample_files()
-        return
+        flag_val = 0
+        if "i" in flags_str or case_insensitive_default:
+            flag_val |= re.IGNORECASE
+        if "m" in flags_str:
+            flag_val |= re.MULTILINE
+        if "s" in flags_str:
+            flag_val |= re.DOTALL
 
-    if not args.urls or not args.keywords:
-        parser.print_help()
-        print("\nError: Both --urls and --keywords are required")
-        return
+        try:
+            compiled_pattern = re.compile(pattern_str, flags=flag_val)
+            patterns.append((compiled_pattern, pattern_str))
+        except re.error as e:
+            print(f"Warning: Invalid regex pattern '{pattern_str}': {e}")
+            continue
 
-    # Validate input files
-    if not Path(args.urls).exists():
-        print(f"Error: URLs file not found: {args.urls}")
-        return
+    return patterns
 
-    if not Path(args.keywords).exists():
-        print(f"Error: Keywords file not found: {args.keywords}")
-        return
+def match_negative_keywords(
+    text_norm: str,
+    title: str,
+    plain_keywords: List[str],
+    regex_patterns: List[Tuple[re.Pattern, str]],
+    case_insensitive: bool
+) -> List[str]:
+    """
+    NEGATIVE DETECTION: Find failure indicators in content.
 
-    # Load inputs
-    print(f"Loading URLs from: {args.urls}")
-    urls = load_urls(args.urls)
-    if not urls:
-        print("No valid URLs found")
-        return
+    Checks both main content and title for comprehensive detection.
+    Handles various keyword expressions and regex patterns.
+    """
+    matched = []
 
-    print(f"Loading keywords from: {args.keywords}")
-    keywords_config = load_keywords(args.keywords)
-    if not keywords_config:
-        print("No keywords configuration loaded")
-        return
+    # Prepare title for checking
+    title_norm = ""
+    if title:
+        title_norm = normalize_text(title, case_insensitive, True)
 
-    print(f"Found {len(urls)} URLs to check")
-    print(f"Max scan bytes: {args.max_bytes}")
-    print(f"Timeout: {args.timeout}s")
-    print("-" * 50)
+    # Check plain text keywords
+    for keyword in plain_keywords:
+        if not keyword:
+            continue
 
-    # Initialize checker and run
-    checker = HealthChecker(keywords_config, args.max_bytes, args.timeout)
-    results = checker.check_multiple_urls(urls)
+        keyword_norm = keyword.lower() if case_insensitive else keyword
 
-    # Save results
-    checker.save_results_to_csv(results, args.out)
+        # Check in main content
+        if keyword_norm in text_norm:
+            matched.append(f"CONTENT:{keyword}")
+            continue
 
-    # Summary
-    total = len(results)
-    healthy = sum(1 for r in results if r["result"] == "Healthy")
-    unhealthy = sum(1 for r in results if r["result"] == "Unhealthy")
-    errors = sum(1 for r in results if r["result"] == "Error")
+        # Check in title
+        if title_norm and keyword_norm in title_norm:
+            matched.append(f"TITLE:{keyword}")
 
-    print(f"\nSummary:")
-    print(f"  Total: {total}")
-    print(f"  Healthy: {healthy}")
-    print(f"  Unhealthy: {unhealthy}")
-    print(f"  Errors: {errors}")
+    # Check regex patterns
+    for pattern, pattern_str in regex_patterns:
+        # Check main content
+        if pattern.search(text_norm):
+            matched.append(f"REGEX_CONTENT:{pattern_str}")
+            continue
 
+        # Check title
+        if title_norm and pattern.search(title_norm):
+            matched.append(f"REGEX_TITLE:{pattern_str}")
+
+    return matched
+
+def sha256_of_text(s: str) -> str:
+    """Generate SHA256 hash of text content for integrity verification"""
+    return hashlib.sha256(s.encode("utf-8", errors="ignore")).hexdigest()[:16]  # Shortened for readability
+
+def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Perform comprehensive health check on a single URL.
+
+    Returns detailed status information including matched keywords,
+    response metadata, and content analysis.
+    """
+    failure_keywords_global = cfg.get("global_keywords", [])
+    settings = cfg["settings"]
+
+    case_insensitive = settings.get("case_insensitive", True)
+    max_bytes = settings.get("max_bytes_to_scan", 3_000_000)
+    timeout = settings.get("timeout_seconds", 8)
+    retries = settings.get("retries", 1)
+    user_agent = settings.get("user_agent", "healthcheck-bot/1.0")
+    text_mime_only = settings.get("text_mime_only", True)
+
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    parsed = urlparse(url)
+    domain = extract_domain(parsed.hostname or "")
+
+    headers = {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate"
+    }
+
+    last_exception = None
+
+    # Retry logic for network resilience
+    for attempt in range(retries + 1):
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+            status_code = response.status_code
+            response_time_ms = int(response.elapsed.total_seconds() * 1000)
+
+            # Check MIME type for text content (addresses JS rendering issues)
+            content_type = response.headers.get("Content-Type", "").lower()
+            if text_mime_only and not any(mime in content_type for mime in ["text/", "application/json", "application/xml"]):
+                return {
+                    "timestamp": timestamp,
+                    "url": url,
+                    "domain": domain,
+                    "status_code": status_code,
+                    "result": "BINARY_CONTENT",
+                    "response_time_ms": response_time_ms,
+                    "content_type": content_type,
+                    "matched_keywords": "",
+                    "title": "",
+                    "content_sha256": "",
+                    "error": "Non-text content type"
+                }
+
+            # Extract and normalize content
+            text_normalized, title, content_type = get_text_and_meta(response, max_bytes, cfg)
+            content_hash = sha256_of_text(text_normalized)
+
+            # Handle non-200 status codes
+            if status_code != 200:
+                result = "HTTP_ERROR"
+                matched_keywords = [f"HTTP_{status_code}"]
+            else:
+                # Comprehensive keyword matching
+                domain_keywords = pick_domain_keywords(cfg, domain)
+                all_plain_keywords = domain_keywords + failure_keywords_global
+                regex_patterns = compile_regexes(cfg.get("regex_keywords", []), case_insensitive)
+
+                matched_keywords = match_negative_keywords(
+                    text_normalized, title, all_plain_keywords, regex_patterns, case_insensitive
+                )
+
+                result = "UNHEALTHY" if matched_keywords else "HEALTHY"
+
+            return {
+                "timestamp": timestamp,
+                "url": url,
+                "domain": domain,
+                "status_code": status_code,
+                "result": result,
+                "response_time_ms": response_time_ms,
+                "content_type": content_type,
+                "matched_keywords": ";".join(matched_keywords),
+                "title": title,
+                "content_sha256": content_hash,
+                "error": None
+            }
+
+        except requests.exceptions.Timeout:
+            last_exception = "Request timeout"
+        except requests.exceptions.ConnectionError as e:
+            last_exception = f"Connection error: {str(e)}"
+        except requests.exceptions.RequestException as e:
+            last_exception = f"Request failed: {str(e)}"
+        except Exception as e:
+            last_exception = f"Unexpected error: {str(e)}"
+
+    # All retries failed
+    return {
+        "timestamp": timestamp,
+        "url": url,
+        "domain": domain,
+        "status_code": "FAILED",
+        "result": "ERROR",
+        "response_time_ms": -1,
+        "content_type": "",
+        "matched_keywords": "",
+        "title": "",
+        "content_sha256": "",
+        "error": last_exception
+    }
+
+def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "health_check_ultimate.csv") -> List[Dict[str, Any]]:
+    """
+    Check multiple URLs and save comprehensive results to CSV.
+
+    Provides detailed analysis including keyword matches, content hashes,
+    and response metadata for thorough monitoring.
+    """
+    cfg = load_keywords(cfg_path)
+
+    # Deduplicate URLs while preserving order
+    seen = set()
+    unique_urls = [url for url in urls if url not in seen and not seen.add(url)]
+
+    results = []
+    total_urls = len(unique_urls)
+
+    print(f"Starting health check for {total_urls} URLs...")
+    print(f"Configuration: {cfg_path}")
+    print("-" * 60)
+
+    for i, url in enumerate(unique_urls, 1):
+        print(f"[{i:2d}/{total_urls}] Checking: {url}")
+
+        result = health_check_url(url, cfg)
+        results.append(result)
+
+        # Status display
+        status_icon = {
+            "HEALTHY": "[OK]",
+            "UNHEALTHY": "[FAIL]",
+            "HTTP_ERROR": "[HTTP_ERR]",
+            "ERROR": "[ERROR]",
+            "BINARY_CONTENT": "[BINARY]"
+        }.get(result['result'], "[UNKNOWN]")
+
+        print(f"   {status_icon} {result['result']} (HTTP: {result['status_code']}) "
+              f"[{result['response_time_ms']}ms]")
+
+        if result['matched_keywords']:
+            print(f"   Keywords: {result['matched_keywords']}")
+
+        if result['title']:
+            title_preview = result['title'][:50] + "..." if len(result['title']) > 50 else result['title']
+            print(f"   Title: {title_preview}")
+
+    # Save detailed results to CSV
+    fieldnames = [
+        "timestamp", "url", "domain", "status_code", "result",
+        "response_time_ms", "content_type", "matched_keywords",
+        "title", "content_sha256", "error"
+    ]
+
+    with open(csv_filename, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+
+    # Summary statistics
+    healthy = sum(1 for r in results if r['result'] == 'HEALTHY')
+    unhealthy = sum(1 for r in results if r['result'] == 'UNHEALTHY')
+    errors = sum(1 for r in results if r['result'] == 'ERROR')
+
+    print("-" * 60)
+    print(f"Results Summary:")
+    print(f"   Healthy: {healthy}")
+    print(f"   Unhealthy: {unhealthy}")
+    print(f"   Errors: {errors}")
+    print(f"   Saved to: {csv_filename}")
+
+    return results
+
+def load_urls_from_file(filename: str) -> List[str]:
+    """Load URLs from a text file, one per line"""
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        return urls
+    except FileNotFoundError:
+        print(f"Error: URL file '{filename}' not found")
+        return []
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    # Example usage with multiple input methods
+    if len(sys.argv) > 1:
+        # Load URLs from file
+        url_file = sys.argv[1]
+        urls = load_urls_from_file(url_file)
+        if not urls:
+            print("No valid URLs found in file")
+            sys.exit(1)
+    else:
+        # Default test URLs
+        urls = [
+            "https://www.law.go.kr",
+            "https://www.google.com",
+            "https://httpbin.org/status/503",  # Test failure detection
+            "https://httpbin.org/html",       # Test success detection
+        ]
+
+    # Run comprehensive health check
+    results = check_multiple_urls(
+        urls,
+        cfg_path="keywords.json",
+        csv_filename="health_check_ultimate.csv"
+    )

@@ -2,15 +2,27 @@
   "global_keywords": [
     "시스템 점검",
     "서비스 중단",
+    "서비스 이용이 제한",
     "불편을 드려 죄송",
     "화재",
+    "열람 불가",
+    "대체사이트",
+    "원복 중",
+    "복구 중",
+    "긴급 점검",
     "maintenance",
     "temporarily unavailable",
     "under construction",
-    "service unavailable"
+    "service unavailable",
+    "server error",
+    "503 service",
+    "502 bad gateway",
+    "504 gateway timeout"
   ],
   "domains": {
-    "www.law.go.kr": [
+    "law.go.kr": [
+      "법령정보 열람 관련 대체사이트",
+      "국가정보자원관리원 전산실 화재",
       "법령 서비스 중단",
       "데이터베이스 점검",
       "법령정보 업데이트"
@@ -23,7 +35,9 @@
       "정부 시스템 점검",
       "공공서비스 일시 중단",
       "전산 장애",
-      "네트워크 점검"
+      "네트워크 점검",
+      "시스템 점검",
+      "서비스 점검"
     ],
     "httpbin.org": [
       "test maintenance",
@@ -32,7 +46,15 @@
   },
   "regex_keywords": [
     {
-      "pattern": "점검.*중",
+      "pattern": "점검\\s*중",
+      "flags": "i"
+    },
+    {
+      "pattern": "원복\\s*중",
+      "flags": "i"
+    },
+    {
+      "pattern": "복구\\s*중",
       "flags": "i"
     },
     {
@@ -46,6 +68,22 @@
     {
       "pattern": "시스템.*장애",
       "flags": "i"
+    },
+    {
+      "pattern": "접속.*불가",
+      "flags": "i"
+    },
+    {
+      "pattern": "일시.*중단",
+      "flags": "i"
     }
-  ]
+  ],
+  "settings": {
+    "case_insensitive": true,
+    "normalize_whitespace": true,
+    "max_bytes_to_scan": 3000000,
+    "timeout_seconds": 8,
+    "retries": 1,
+    "user_agent": "healthcheck-bot/1.0"
+  }
 }

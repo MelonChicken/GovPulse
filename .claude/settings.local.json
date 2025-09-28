@@ -6,7 +6,10 @@
       "Bash(mkdir:*)",
       "Bash(python:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)",
+      "Bash(source:*)"
     ],
     "deny": [],
     "ask": []
