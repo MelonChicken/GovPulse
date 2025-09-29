@@ -83,7 +83,6 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 
 ## 🔄 최근 변경사항
 
-### v2024.12 - 실시간 모니터링 강화
 - **SKIPPED 상태 제거**: 더 이상 "Rate Limited" 표시 없음
 - **실시간 체크**: 새로고침할 때마다 무조건 실제 요청 수행
 - **간소화된 상태**: Healthy/Unhealthy/Error 3가지로 단순화
