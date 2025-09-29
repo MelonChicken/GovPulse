@@ -343,6 +343,18 @@ async def dashboard():
             .url { color: #007bff; text-decoration: none; }
             .timestamp { color: #666; font-size: 0.9em; }
             .last-result { color: #868e96; font-style: italic; font-size: 0.85em; }
+            .keywords-container { margin: 10px 0; }
+            .keyword-tag {
+                display: inline-block;
+                background: #f8f9fa;
+                color: #dc3545;
+                padding: 2px 6px;
+                margin: 2px;
+                border-radius: 3px;
+                font-size: 0.8em;
+                border: 1px solid #dee2e6;
+            }
+            .keyword-tag:before { content: '#'; }
         </style>
     </head>
     <body>
@@ -358,6 +370,34 @@ async def dashboard():
                     const data = await response.json();
 
                     const cardsHtml = data.map(site => {
+                        // Extract keywords for unhealthy sites
+                        let keywordsHtml = '';
+                        if (site.outcome === 'Unhealthy') {
+                            let keywords = [];
+
+                            // From healthcheck_details (comprehensive analysis)
+                            if (site.healthcheck_details && site.healthcheck_details.matched_keywords) {
+                                const healthKeywords = site.healthcheck_details.matched_keywords.split(';').filter(k => k.trim());
+                                keywords = keywords.concat(healthKeywords);
+                            }
+
+                            // From error message (simple fallback)
+                            if (site.error && keywords.length === 0) {
+                                keywords.push(site.error);
+                            }
+
+                            // From HTTP status (if no other keywords)
+                            if (site.http && site.http !== 200 && keywords.length === 0) {
+                                keywords.push(`HTTP_${site.http}`);
+                            }
+
+                            if (keywords.length > 0) {
+                                const keywordTags = keywords.map(keyword =>
+                                    `<span class="keyword-tag">${keyword.replace(/^(KEYWORD:|REGEX:|CONTENT:|TITLE:)/, '')}</span>`
+                                ).join('');
+                                keywordsHtml = `<div class="keywords-container">${keywordTags}</div>`;
+                            }
+                        }
 
                         return `
                             <div class="card">
@@ -366,6 +406,7 @@ async def dashboard():
                                 <div class="metric">HTTP: ${site.http || 'N/A'}</div>
                                 <div class="metric">TTFB: ${site.ttfb_ms}ms</div>
                                 ${site.error ? `<div class="metric">Error: ${site.error}</div>` : ''}
+                                ${keywordsHtml}
                                 <div class="timestamp">Last checked: ${new Date(site.ts).toLocaleString()}</div>
                             </div>
                         `;
