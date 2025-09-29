@@ -37,6 +37,11 @@ def load_keywords(json_path: str) -> Dict[str, Any]:
                 "server error", "503 service", "502 bad gateway", "504 gateway timeout",
                 "일시적으로 사용할 수 없습니다", "서비스 장애", "접속 불가"
             ],
+            "neutral_info_keywords": [
+                "점검 예정", "scheduled update", "정기 업데이트", "routine maintenance",
+                "업데이트 안내", "update notice", "서비스 개선", "service improvement",
+                "시스템 업그레이드", "system upgrade"
+            ],
             "domains": {},
             "regex_keywords": [
                 {"pattern": r"(시스템\s*점검|서비스\s*중단|일시\s*중단|점검\s*중|서비스\s*일시\s*중단|시스템\s*오류)", "flags": "i"},
@@ -58,12 +63,17 @@ def load_keywords(json_path: str) -> Dict[str, Any]:
                 "timeout_seconds": 8,
                 "retries": 1,
                 "user_agent": "healthcheck-bot/1.0",
-                "min_text_length": 100
+                "min_text_length": 60,
+                "min_text_length_overrides": {
+                    "*.go.kr": 30,
+                    "www.data.go.kr": 50
+                }
             }
         }
 
     # Set default values with comprehensive fallbacks
     cfg.setdefault("global_keywords", [])
+    cfg.setdefault("neutral_info_keywords", [])
     cfg.setdefault("domains", {})
     cfg.setdefault("regex_keywords", [])
     cfg.setdefault("settings", {})
@@ -286,19 +296,70 @@ def match_negative_keywords(
 
     return matched
 
-def perform_content_probe(comprehensive_text: str, title: str, min_length: int) -> Tuple[bool, List[str]]:
+def match_neutral_keywords(
+    comprehensive_text: str,
+    neutral_keywords: List[str],
+    case_insensitive: bool
+) -> List[str]:
+    """
+    NEUTRAL DETECTION: Find informational indicators that suggest degraded but not failed service.
+    These indicate planned maintenance, updates, or informational notices.
+    """
+    matched = []
+
+    # Check neutral keywords
+    for keyword in neutral_keywords:
+        if not keyword:
+            continue
+
+        keyword_norm = keyword.lower() if case_insensitive else keyword
+
+        if keyword_norm in comprehensive_text:
+            matched.append(f"INFO:{keyword}")
+
+    return matched
+
+def perform_content_probe(comprehensive_text: str, title: str, meta_content: str, domain: str, cfg: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """
     Perform comprehensive content probes to detect incomplete/error pages.
     Returns: (is_healthy, issues_found)
     """
     issues = []
+    settings = cfg.get("settings", {})
+
+    # Get min_text_length with domain-specific overrides
+    min_length = settings.get("min_text_length", 100)
+    overrides = settings.get("min_text_length_overrides", {})
+
+    # Check for domain-specific overrides (exact match first, then wildcard)
+    if domain in overrides:
+        min_length = overrides[domain]
+    else:
+        # Check wildcard patterns (*.go.kr)
+        for pattern, override_length in overrides.items():
+            if pattern.startswith("*.") and domain.endswith(pattern[1:]):
+                min_length = override_length
+                break
 
     # Text length probe
     if len(comprehensive_text) < min_length:
         issues.append(f"SHORT_CONTENT:{len(comprehensive_text)}")
 
-    # Title probe
-    if not title or len(title.strip()) == 0:
+    # Enhanced title probe - check for meta description/og tags as alternatives
+    has_title = title and len(title.strip()) > 0
+    has_meta_description = False
+    has_og_title = False
+
+    if meta_content:
+        # Check for meta description
+        if re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']+)["\']', meta_content, re.IGNORECASE):
+            has_meta_description = True
+        # Check for og:title or og:description
+        if re.search(r'<meta[^>]*property=["\']og:(title|description)["\'][^>]*content=["\']([^"\']+)["\']', meta_content, re.IGNORECASE):
+            has_og_title = True
+
+    # Only add NO_TITLE if none of the title alternatives exist
+    if not (has_title or has_meta_description or has_og_title):
         issues.append("NO_TITLE")
 
     # Word count probe (only if text length is sufficient but word count is low)
@@ -385,7 +446,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
             comprehensive_text, title, meta_content, noscript, content_type = get_comprehensive_content(response, max_bytes, cfg)
             content_hash = sha256_of_text(comprehensive_text)
 
-            # Health determination logic
+            # Health determination logic - 3-tier system
             if status_code != 200:
                 result = "Unhealthy"
                 matched_keywords = [f"HTTP_{status_code}"]
@@ -395,18 +456,36 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
                 all_plain_keywords = domain_keywords + failure_keywords_global
                 regex_patterns = compile_regexes(cfg.get("regex_keywords", []), case_insensitive)
 
-                matched_keywords = match_negative_keywords(
+                # Check for negative (failure) keywords
+                negative_keywords = match_negative_keywords(
                     comprehensive_text, all_plain_keywords, regex_patterns, case_insensitive
                 )
 
+                # Check for neutral (informational) keywords
+                neutral_keywords_list = cfg.get("neutral_info_keywords", [])
+                neutral_keywords = match_neutral_keywords(
+                    comprehensive_text, neutral_keywords_list, case_insensitive
+                )
+
                 # Perform content probes
-                probe_healthy, probe_issues = perform_content_probe(comprehensive_text, title, min_text_length)
+                probe_healthy, probe_issues = perform_content_probe(comprehensive_text, title, meta_content, domain, cfg)
 
-                if not probe_healthy:
-                    matched_keywords.extend(probe_issues)
+                # Combine all matched keywords
+                matched_keywords = negative_keywords + neutral_keywords + (probe_issues if not probe_healthy else [])
 
-                # Final determination: Healthy only if no keywords matched AND probes passed
-                result = "Healthy" if (not matched_keywords and probe_healthy) else "Unhealthy"
+                # 3-tier health determination
+                if negative_keywords:
+                    # Any negative keyword = Unhealthy
+                    result = "Unhealthy"
+                elif neutral_keywords or (not probe_healthy and len(probe_issues) <= 1):
+                    # Neutral keywords OR minor probe issues (≤1) = Degraded
+                    result = "Degraded"
+                elif not probe_healthy and len(probe_issues) >= 2:
+                    # Multiple probe issues (≥2) = Unhealthy
+                    result = "Unhealthy"
+                else:
+                    # No issues = Healthy
+                    result = "Healthy"
 
             return {
                 "timestamp": timestamp,
@@ -449,7 +528,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
 def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "health_check_ultimate.csv") -> List[Dict[str, Any]]:
     """
     Check multiple URLs and save comprehensive results to CSV.
-    Only reports Healthy/Unhealthy states - no other status values.
+    Reports Healthy/Degraded/Unhealthy states with enhanced analysis.
     """
     cfg = load_keywords(cfg_path)
 
@@ -462,7 +541,7 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
 
     print(f"Starting enhanced health check for {total_urls} URLs...")
     print(f"Configuration: {cfg_path}")
-    print("Enhanced features: comprehensive text analysis, content probes, UTF-8 priority")
+    print("Enhanced features: comprehensive text analysis, 3-tier status (Healthy/Degraded/Unhealthy), meta tag support")
     print("-" * 70)
 
     for i, url in enumerate(unique_urls, 1):
@@ -471,8 +550,13 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
         result = health_check_url(url, cfg)
         results.append(result)
 
-        # Status display - only Healthy/Unhealthy
-        status_icon = "[OK]" if result['result'] == "Healthy" else "[FAIL]"
+        # Status display - 3-tier system
+        if result['result'] == "Healthy":
+            status_icon = "[OK]"
+        elif result['result'] == "Degraded":
+            status_icon = "[WARN]"
+        else:  # Unhealthy
+            status_icon = "[FAIL]"
 
         print(f"   {status_icon} {result['result']} (HTTP: {result['status_code']}) "
               f"[{result['response_time_ms']}ms]")
@@ -497,13 +581,15 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
         writer.writeheader()
         writer.writerows(results)
 
-    # Summary statistics - only Healthy/Unhealthy
+    # Summary statistics - 3-tier system
     healthy = sum(1 for r in results if r['result'] == 'Healthy')
+    degraded = sum(1 for r in results if r['result'] == 'Degraded')
     unhealthy = sum(1 for r in results if r['result'] == 'Unhealthy')
 
     print("-" * 70)
     print(f"Results Summary:")
     print(f"   Healthy: {healthy}")
+    print(f"   Degraded: {degraded}")
     print(f"   Unhealthy: {unhealthy}")
     print(f"   Total: {len(results)}")
     print(f"   Saved to: {csv_filename}")

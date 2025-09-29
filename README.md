@@ -21,7 +21,7 @@
 이 프로젝트는 최근 (2025.9.26. 20:15) 발생한 국가정보자원관리원의 화재 사고의 영향으로 정부 사이트 및 전산이 마비됨에 따라 주요 사이트의 복구 여부를 한눈에 보기 위해 만들어진 프로젝트 입니다.
 
 기술 스택은 FastAPI를 기반으로 가벼우면서 빠른 개발을 지향하였고 Claude code로 빠른 시간 내에 개발을 목표로 프로젝트를 진행하였습니다.
-이에 따라 아직 (2025.9.29.)은 프로젝트의 구조가 불안정한 상태이며 healthy 판단 로직 또한 정리되지 않은 프로토타입만이 존재하는 상황입니다.
+현재 (2025.9.29.) 3단계 지능형 건강 상태 판단 시스템이 구축되어 정교한 사이트 상태 분석이 가능합니다.
 
 그렇기에 언제든지 개선점에 대한 의견을 주시면 감사하겠습니다.
 현재 이 프로젝트의 협업 방식은 pull request로 신청시 검토후 반영 (만약 현재 레포지토리로 업로드를 희망하시는 경우) 혹은 독자적 개발을 채택하고 있습니다.
@@ -177,12 +177,187 @@ https://example2.go.kr/
 3. **상태 체크** 정상 작동 확인
 4. **키워드 감지** 테스트 (해당하는 경우)
 
+## 🩺 Healthy 판단 로직
+
+각 구현체는 서로 다른 복잡도의 건강 상태 판단 로직을 사용합니다.
+
+### 📊 개선된 3단계 상태 분류 체계
+
+| 상태 | 의미 | 표시 | 판정 기준 |
+|------|------|------|-----------|
+| **Healthy** | 정상 작동 | 🟢 녹색 | HTTP 200 + 부정 키워드 없음 + 콘텐츠 품질 양호 |
+| **Degraded** | 부분 장애/정보성 | 🟡 노란색 | HTTP 200 + 중립 키워드 감지 OR 경미한 품질 문제 (≤1개) |
+| **Unhealthy** | 심각한 장애 | 🔴 빨간색 | HTTP 오류 OR 부정 키워드 감지 OR 심각한 품질 문제 (≥2개) |
+
+### 1. 🐍 기본 FastAPI 버전 (`main.py`)
+
+#### 기본 로직 (fallback)
+```
+if (HTTP 200) → Healthy
+else → Unhealthy
+```
+
+#### 고급 로직 (keywords.json 사용시)
+```
+if (keywords.json 로딩 성공):
+    result = healthcheck.health_check_url() 호출
+    → 3단계 종합 분석 결과 사용
+else:
+    → 기본 로직 사용
+```
+
+**주요 특징**:
+- `keywords.json` 파일이 있으면 고급 분석 자동 활성화
+- robots.txt 완전 준수 (`main.py:104-151`)
+- HEAD 요청 우선, 405 오류시 GET 요청으로 재시도 (`main.py:244-252`)
+
+### 2. 🏭 프로덕션 FastAPI + Caddy 버전 (`politeping/`)
+
+#### 상세 판단 로직 (`politeping/app/checker.py:261-273`)
+```python
+if (HTTP 200-399 범위):
+    if (부정 키워드 감지):
+        → Unhealthy
+    else:
+        → Healthy
+elif (HTTP 상태 코드 존재):
+    → Error
+else:
+    → Error (연결 실패)
+```
+
+**핵심 분석 과정**:
+1. **요청 단계** (`checker.py:244`) - HEAD 요청 시도, 실패시 GET 스트리밍
+2. **콘텐츠 분석** - 전체 페이지 콘텐츠 다운로드 (최대 3MB)
+3. **부정 키워드 검사** - 글로벌 + 도메인별 키워드 및 정규식 패턴 매칭
+
+### 3. 🔍 헬스체크 스크립트 (`healthcheck.py`) - **새로 개선됨**
+
+#### 최고 수준의 3단계 종합 분석
+```python
+if (HTTP != 200):
+    → Unhealthy
+elif (부정 키워드 매칭):
+    → Unhealthy
+elif (중립 키워드 매칭 OR 경미한 품질 문제 ≤1개):
+    → Degraded
+elif (심각한 품질 문제 ≥2개):
+    → Unhealthy
+else:
+    → Healthy
+```
+
+**10단계 종합 검사 과정**:
+
+1. **기본 HTTP 검사** - HTTP 200이 아니면 즉시 Unhealthy
+
+2. **콘텐츠 수집** - UTF-8 우선 인코딩, HTML 전체 다운로드 (최대 3MB)
+
+3. **종합 텍스트 추출** - Title, Meta description/og:*, Noscript, 본문 텍스트 통합 분석
+
+4. **텍스트 정규화** - 유니코드 NFKC, 공백 정규화, 대소문자 통일
+
+5. **부정 키워드 검사**
+   - **글로벌 키워드**: "시스템 점검", "maintenance", "server error" 등
+   - **도메인별 키워드**: 와일드카드 패턴 지원 (*.go.kr)
+   - **정규식 패턴**: 11개 고급 패턴으로 장애 상황 탐지
+
+6. **🆕 중립 키워드 검사** (새로운 기능)
+   - **정보성 키워드**: "점검 예정", "scheduled update", "정기 업데이트" 등
+   - **계획된 유지보수**: "routine maintenance", "시스템 업그레이드" 등
+   - **서비스 개선**: "update notice", "service improvement" 등
+
+7. **향상된 콘텐츠 품질 검사**
+   - **도메인별 최소 길이**: `min_text_length_overrides` 설정 지원
+   - **메타 태그 기반 제목 검증**: `<meta name="description">`, `<meta property="og:title/description">` 인정
+   - **단어 수 부족**: 10개 미만 단어 감지
+   - **JavaScript 오류**: 4가지 JS 에러 패턴 감지
+
+8. **지능형 최종 판정**
+   ```python
+   if 부정_키워드_존재:
+       return "Unhealthy"
+   elif 중립_키워드_존재 or (품질_문제_개수 <= 1):
+       return "Degraded"
+   elif 품질_문제_개수 >= 2:
+       return "Unhealthy"
+   else:
+       return "Healthy"
+   ```
+
+9. **결과 생성** - 타임스탬프, 응답시간, 콘텐츠 해시, 상세 키워드 정보
+
+10. **통계 및 리포팅** - 3단계 상태별 집계 및 CSV 출력
+
+### 📋 향상된 키워드 설정 (`keywords.json`)
+
+#### 새로운 키워드 카테고리
+```json
+{
+  "global_keywords": [
+    "시스템 점검", "서비스 중단", "maintenance", "server error"
+  ],
+  "neutral_info_keywords": [
+    "점검 예정", "scheduled update", "정기 업데이트",
+    "routine maintenance", "시스템 업그레이드"
+  ],
+  "domains": {
+    "*.go.kr": ["정부사이트 특화 키워드"]
+  },
+  "settings": {
+    "min_text_length": 60,
+    "min_text_length_overrides": {
+      "*.go.kr": 30,
+      "www.data.go.kr": 50
+    }
+  }
+}
+```
+
+#### 도메인별 최소 텍스트 길이 설정
+- **기본값**: 60자
+- ***.go.kr**: 30자 (정부사이트는 간결한 경우가 많음)
+- **특정 사이트**: 개별 설정 가능
+
+### 🚨 False Positive 방지 개선 사항
+
+#### 1. 메타 태그 기반 제목 인정
+- `<meta name="description">` 존재시 제목 누락으로 판정하지 않음
+- `<meta property="og:title">`, `<meta property="og:description">` 인정
+
+#### 2. 3단계 점진적 판정
+- **Degraded 상태 도입**: 완전한 장애가 아닌 정보성/계획된 상황 구분
+- **중립 키워드**: 계획된 유지보수나 업데이트 안내는 Degraded로 분류
+
+#### 3. 도메인별 맞춤 설정
+- 정부사이트는 일반적으로 간결 → 낮은 최소 텍스트 길이 적용
+- 사이트별 특성에 맞는 개별 임계값 설정
+
+### 💡 성능 최적화 유지
+
+#### 요청 최적화
+- **HEAD 우선**: 콘텐츠 다운로드 없이 상태 확인
+- **스트리밍 GET**: HEAD 실패시 부분 다운로드
+- **타임아웃 설정**: 연결 5초, 읽기 8초, 전체 12초
+
+#### 캐싱 전략
+- **robots.txt**: 24시간 캐시
+- **성공 결과**: 메모리 캐시로 빠른 재확인
+
+#### Rate Limiting
+- **호스트별**: 동시 요청 1개 제한
+- **글로벌**: 최대 3개 동시 요청
+- **최소 간격**: 호스트당 60초, 엔드포인트당 10분
+
 ## 🔄 최근 변경사항
 
-- **SKIPPED 상태 제거**: 더 이상 "Rate Limited" 표시 없음
-- **실시간 체크**: 새로고침할 때마다 무조건 실제 요청 수행
-- **간소화된 상태**: Healthy/Unhealthy/Error 3가지로 단순화
-- **UI 개선**: 모든 대시보드에서 일관된 상태 표시
+### v2024.12.29 - 지능형 3단계 건강 상태 시스템
+- **3단계 상태 도입**: Healthy/Degraded/Unhealthy로 세분화
+- **중립 키워드 시스템**: 계획된 유지보수/업데이트 정보 구분
+- **메타 태그 지원**: description, og:title/description을 제목 대안으로 인정
+- **도메인별 설정**: `min_text_length_overrides`로 사이트별 맞춤 임계값
+- **False Positive 대폭 감소**: 정부사이트 특성 반영한 판정 로직
+- **향상된 리포팅**: 3단계 상태별 통계 및 상세 분석 결과
 
 ## 🚨 주의사항
 
