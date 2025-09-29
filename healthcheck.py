@@ -39,11 +39,17 @@ def load_keywords(json_path: str) -> Dict[str, Any]:
             ],
             "domains": {},
             "regex_keywords": [
-                {"pattern": r"(시스템\s*점검|서비스\s*중단|일시\s*중단)", "flags": "i"},
-                {"pattern": r"(maintenance|temporarily\s*unavailable|service\s*unavailable)", "flags": "i"},
-                {"pattern": r"(server\s*error|internal\s*error|50[0-9]\s*error)", "flags": "i"},
-                {"pattern": r"(gateway\s*time\s*out|service\s*unavailable)", "flags": "i"},
-                {"pattern": r"(access\s*denied|temporarily\s*unavailable|we\s*are\s*working\s*to\s*restore)", "flags": "i"}
+                {"pattern": r"(시스템\s*점검|서비스\s*중단|일시\s*중단|점검\s*중|서비스\s*일시\s*중단|시스템\s*오류)", "flags": "i"},
+                {"pattern": r"(maintenance|temporarily\s*unavailable|service\s*unavailable|under\s*maintenance|scheduled\s*maintenance)", "flags": "i"},
+                {"pattern": r"(server\s*error|internal\s*error|50[0-9]\s*error|gateway\s*time\s*out)", "flags": "i"},
+                {"pattern": r"(페이지를\s*찾을\s*수\s*없습니다|404\s*not\s*found|page\s*not\s*found)", "flags": "i"},
+                {"pattern": r"(연결\s*시간\s*초과|connection\s*timeout|request\s*timeout)", "flags": "i"},
+                {"pattern": r"(데이터베이스\s*오류|database\s*error|db\s*connection\s*failed)", "flags": "i"},
+                {"pattern": r"(세션\s*만료|session\s*expired|로그인\s*필요)", "flags": "i"},
+                {"pattern": r"(권한\s*없음|unauthorized|forbidden|access\s*denied)", "flags": "i"},
+                {"pattern": r"(네트워크\s*오류|network\s*error|connection\s*refused)", "flags": "i"},
+                {"pattern": r"(잠시\s*후\s*다시|please\s*try\s*again|retry\s*later)", "flags": "i"},
+                {"pattern": r"(접속\s*불가|cannot\s*access|we\s*are\s*working\s*to\s*restore)", "flags": "i"}
             ],
             "settings": {
                 "case_insensitive": True,
@@ -118,11 +124,14 @@ def normalize_text(s: str, case_insensitive: bool, normalize_ws: bool) -> str:
 
 def extract_comprehensive_text(html: str) -> Tuple[str, str, str, str]:
     """
-    Extract comprehensive text from HTML including:
+    Extract comprehensive text from HTML for unified analysis including:
     - Title tag content
-    - Meta description and og:* properties
+    - Meta description and all og:* properties
     - Noscript content
-    - Main body text
+    - Main body text (excluding scripts and styles)
+
+    All content is combined into a single comprehensive text that is analyzed
+    for error keywords and content quality indicators.
     """
     # Extract title
     title_match = re.search(r"<title[^>]*>(.*?)</title>", html, flags=re.IGNORECASE | re.DOTALL)
@@ -132,20 +141,26 @@ def extract_comprehensive_text(html: str) -> Tuple[str, str, str, str]:
         title = re.sub(r"<[^>]+>", "", title)  # Remove nested tags
         title = re.sub(r"\s+", " ", title).strip()
 
-    # Extract meta description
-    meta_desc = ""
-    meta_desc_match = re.search(r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
-    if meta_desc_match:
-        meta_desc = meta_desc_match.group(1)
+    # Extract all meta content: description, og:*, twitter:*, etc.
+    meta_content = []
 
-    # Extract og:* meta properties
-    og_metas = []
+    # Meta description
+    meta_desc_matches = re.findall(r'<meta[^>]*name=["\']description["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
+    meta_content.extend(meta_desc_matches)
+
+    # All og:* properties (title, description, etc.)
     og_matches = re.findall(r'<meta[^>]*property=["\']og:[^"\']*["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
-    og_metas.extend(og_matches)
+    meta_content.extend(og_matches)
 
-    # Also check reverse order (content first, then property)
+    # Reverse order patterns
     og_matches_rev = re.findall(r'<meta[^>]*content=["\']([^"\']*)["\'][^>]*property=["\']og:[^"\']*["\']', html, re.IGNORECASE)
-    og_metas.extend(og_matches_rev)
+    meta_content.extend(og_matches_rev)
+
+    # Twitter cards and other meta properties
+    twitter_matches = re.findall(r'<meta[^>]*name=["\']twitter:[^"\']*["\'][^>]*content=["\']([^"\']*)["\']', html, re.IGNORECASE)
+    meta_content.extend(twitter_matches)
+
+    meta_combined = " ".join(meta_content)
 
     # Extract noscript content
     noscript_content = ""
@@ -156,31 +171,30 @@ def extract_comprehensive_text(html: str) -> Tuple[str, str, str, str]:
         noscript_content = re.sub(r"<[^>]+>", " ", noscript_combined)
         noscript_content = re.sub(r"\s+", " ", noscript_content).strip()
 
-    # Combine all extracted text
-    combined_parts = []
-    if title:
-        combined_parts.append(title)
-    if meta_desc:
-        combined_parts.append(meta_desc)
-    if og_metas:
-        combined_parts.extend(og_metas)
-    if noscript_content:
-        combined_parts.append(noscript_content)
-
-    # Add main body (remove script and style tags first)
+    # Extract main body text (remove script and style tags first)
     body_text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.IGNORECASE | re.DOTALL)
     body_text = re.sub(r"<[^>]+>", " ", body_text)
     body_text = re.sub(r"\s+", " ", body_text).strip()
-    combined_parts.append(body_text)
+
+    # Combine ALL extracted text into one comprehensive analysis target
+    combined_parts = []
+    if title:
+        combined_parts.append(title)
+    if meta_combined:
+        combined_parts.append(meta_combined)
+    if noscript_content:
+        combined_parts.append(noscript_content)
+    if body_text:
+        combined_parts.append(body_text)
 
     comprehensive_text = " ".join(combined_parts)
 
-    return comprehensive_text, title, meta_desc, noscript_content
+    return comprehensive_text, title, meta_combined, noscript_content
 
 def get_comprehensive_content(resp: requests.Response, max_bytes: int, cfg: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
     """
     Extract comprehensive content with improved encoding handling.
-    Returns: (comprehensive_text, title, meta_desc, noscript, content_type)
+    Returns: (comprehensive_text, title, meta_content, noscript, content_type)
     """
     # Enhanced encoding detection - prioritize UTF-8
     if not resp.encoding or resp.encoding == 'ISO-8859-1':
@@ -205,7 +219,7 @@ def get_comprehensive_content(resp: requests.Response, max_bytes: int, cfg: Dict
         raw_html = raw_html[:max_bytes]
 
     # Extract comprehensive text content
-    comprehensive_text, title, meta_desc, noscript = extract_comprehensive_text(raw_html)
+    comprehensive_text, title, meta_content, noscript = extract_comprehensive_text(raw_html)
 
     # Normalize the comprehensive text
     comprehensive_normalized = normalize_text(
@@ -214,7 +228,7 @@ def get_comprehensive_content(resp: requests.Response, max_bytes: int, cfg: Dict
         cfg["settings"].get("normalize_whitespace", True),
     )
 
-    return comprehensive_normalized, title, meta_desc, noscript, content_type
+    return comprehensive_normalized, title, meta_content, noscript, content_type
 
 def compile_regexes(regex_cfg: List[Dict[str, str]], case_insensitive_default: bool) -> List[Tuple[re.Pattern, str]]:
     """
@@ -287,9 +301,8 @@ def perform_content_probe(comprehensive_text: str, title: str, min_length: int) 
     if not title or len(title.strip()) == 0:
         issues.append("NO_TITLE")
 
-    # Basic structure probe - check for common HTML elements
-    if comprehensive_text:
-        # Very basic check - if we have some reasonable amount of text, consider it structured
+    # Word count probe (only if text length is sufficient but word count is low)
+    if len(comprehensive_text) >= min_length:
         word_count = len(comprehensive_text.split())
         if word_count < 10:
             issues.append(f"FEW_WORDS:{word_count}")
@@ -369,7 +382,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
                 }
 
             # Extract comprehensive content
-            comprehensive_text, title, meta_desc, noscript, content_type = get_comprehensive_content(response, max_bytes, cfg)
+            comprehensive_text, title, meta_content, noscript, content_type = get_comprehensive_content(response, max_bytes, cfg)
             content_hash = sha256_of_text(comprehensive_text)
 
             # Health determination logic
@@ -459,7 +472,7 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
         results.append(result)
 
         # Status display - only Healthy/Unhealthy
-        status_icon = "✓ [OK]" if result['result'] == "Healthy" else "✗ [FAIL]"
+        status_icon = "[OK]" if result['result'] == "Healthy" else "[FAIL]"
 
         print(f"   {status_icon} {result['result']} (HTTP: {result['status_code']}) "
               f"[{result['response_time_ms']}ms]")
@@ -490,10 +503,10 @@ def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "hea
 
     print("-" * 70)
     print(f"Results Summary:")
-    print(f"   ✓ Healthy: {healthy}")
-    print(f"   ✗ Unhealthy: {unhealthy}")
-    print(f"   📊 Total: {len(results)}")
-    print(f"   💾 Saved to: {csv_filename}")
+    print(f"   Healthy: {healthy}")
+    print(f"   Unhealthy: {unhealthy}")
+    print(f"   Total: {len(results)}")
+    print(f"   Saved to: {csv_filename}")
 
     return results
 

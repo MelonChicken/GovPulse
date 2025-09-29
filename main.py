@@ -14,6 +14,10 @@ from urllib.parse import urlparse, urljoin
 from urllib.robotparser import RobotFileParser
 from dotenv import load_dotenv
 from collections import defaultdict
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from healthcheck import health_check_url, load_keywords
 
 # Load environment variables
 load_dotenv()
@@ -28,6 +32,7 @@ logger = logging.getLogger(__name__)
 # Global configuration
 CONFIG = {}
 ENDPOINTS = []
+HEALTHCHECK_CONFIG = {}  # healthcheck configuration
 app_start_time = time.time()
 
 # In-memory caches (reset on restart)
@@ -37,7 +42,7 @@ host_semaphores = {}  # concurrency control per host
 
 def load_config():
     """Load configuration from YAML and environment variables"""
-    global CONFIG, ENDPOINTS
+    global CONFIG, ENDPOINTS, HEALTHCHECK_CONFIG
 
     try:
         with open('endpoints.yaml', 'r', encoding='utf-8') as f:
@@ -66,6 +71,14 @@ def load_config():
         hosts = set(urlparse(ep['url']).netloc for ep in ENDPOINTS)
         for host in hosts:
             host_semaphores[host] = asyncio.Semaphore(CONFIG['budgets']['per_host_concurrency'])
+
+        # Load healthcheck configuration
+        try:
+            HEALTHCHECK_CONFIG = load_keywords("keywords.json")
+            logger.info("Healthcheck configuration loaded successfully.")
+        except Exception as hc_e:
+            logger.warning(f"Failed to load healthcheck config: {hc_e}. Using simple HTTP status checks.")
+            HEALTHCHECK_CONFIG = None
 
         logger.info(f"Configuration loaded successfully. {len(ENDPOINTS)} endpoints configured.")
 
@@ -138,7 +151,7 @@ async def check_robots_txt(url: str) -> bool:
 
 
 async def check_website(endpoint: Dict) -> Dict:
-    """Check a single website and return monitoring data"""
+    """Check a single website and return monitoring data with comprehensive health analysis"""
     url = endpoint['url']
     name = endpoint['name']
     start_time = time.time()
@@ -167,7 +180,52 @@ async def check_website(endpoint: Dict) -> Dict:
         }))
         return result
 
-    # Concurrency control
+    # Use comprehensive healthcheck if available, otherwise fallback to simple check
+    if HEALTHCHECK_CONFIG:
+        try:
+            # Use comprehensive healthcheck logic
+            import asyncio
+            loop = asyncio.get_event_loop()
+            health_result = await loop.run_in_executor(None, health_check_url, url, HEALTHCHECK_CONFIG)
+
+            # Convert healthcheck result to main.py format
+            outcome = health_result['result']  # "Healthy" or "Unhealthy"
+
+            result = {
+                "name": name,
+                "url": url,
+                "http": health_result['status_code'],
+                "ttfb_ms": health_result['response_time_ms'],
+                "outcome": outcome,
+                "error": health_result.get('error'),
+                "ts": datetime.now().isoformat(),
+                "skipped": False,
+                "healthcheck_details": {
+                    "matched_keywords": health_result.get('matched_keywords', ''),
+                    "title": health_result.get('title', ''),
+                    "content_hash": health_result.get('content_sha256', '')
+                }
+            }
+
+            logger.info(json.dumps({
+                "outcome": outcome,
+                "http": health_result['status_code'],
+                "ttfb_ms": health_result['response_time_ms'],
+                "elapsed_ms": int((time.time() - start_time) * 1000),
+                "skipped": False,
+                "robots": False,
+                "host": urlparse(url).netloc,
+                "url": url,
+                "healthcheck_issues": health_result.get('matched_keywords', '')
+            }))
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Comprehensive healthcheck failed for {url}: {e}. Falling back to simple check.")
+            # Fall through to simple check
+
+    # Fallback to simple HTTP status check
     host = urlparse(url).netloc
     semaphore = host_semaphores.get(host)
 
@@ -197,13 +255,9 @@ async def check_website(endpoint: Dict) -> Dict:
                     status = e.status
                     ttfb_ms = int((time.time() - start_time) * 1000)
 
-                # Determine outcome
+                # Simple outcome determination (fallback mode)
                 if status == 200:
                     outcome = "Healthy"
-                elif 400 <= status < 500:
-                    outcome = "Error"
-                elif 500 <= status:
-                    outcome = "Error"
                 else:
                     outcome = "Unhealthy"
 
@@ -225,7 +279,7 @@ async def check_website(endpoint: Dict) -> Dict:
             "url": url,
             "http": None,
             "ttfb_ms": elapsed_ms,
-            "outcome": "Error",
+            "outcome": "Unhealthy",
             "error": "Request timeout",
             "ts": datetime.now().isoformat(),
             "skipped": False
@@ -237,14 +291,14 @@ async def check_website(endpoint: Dict) -> Dict:
             "url": url,
             "http": None,
             "ttfb_ms": elapsed_ms,
-            "outcome": "Error",
+            "outcome": "Unhealthy",
             "error": str(e),
             "ts": datetime.now().isoformat(),
             "skipped": False
         }
 
     # Cache successful results
-    if result['outcome'] in ['Healthy', 'Error', 'Unhealthy']:
+    if result['outcome'] in ['Healthy', 'Unhealthy']:
         last_results[url] = {
             'last_outcome': result['outcome'],
             'last_http': result['http'],
@@ -284,7 +338,6 @@ async def dashboard():
             .status { font-weight: bold; padding: 4px 8px; border-radius: 4px; }
             .Healthy { background: #d4edda; color: #155724; }
             .Unhealthy { background: #fff3cd; color: #856404; }
-            .Error { background: #f8d7da; color: #721c24; }
             .DISALLOWED { background: #f8d7da; color: #721c24; }
             .metric { margin: 8px 0; }
             .url { color: #007bff; text-decoration: none; }
