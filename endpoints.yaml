@@ -13,18 +13,60 @@ endpoints:
   - name: "정부24 메인"
     url: "https://www.gov.kr/"
     keywords: ["정부24", "Government 24"]
-  - name: "K-ETA 메인"
-    url: "https://www.k-eta.go.kr/"
-    keywords: ["K-ETA", "전자여행허가"]
-  - name: "전자입국신고 메인"
-    url: "https://www.e-arrivalcard.go.kr/"
-    keywords: ["전자입국신고", "e-Arrival"]
+  - name: "공공데이터포털 메인"
+    url: "https://www.data.go.kr/"
+    keywords: ["공공데이터포털", "DATA.GO.KR"]
   - name: "국가법령정보센터 메인"
     url: "https://www.law.go.kr/"
     keywords: ["국가법령", "법령정보"]
   - name: "우정사업본부 메인"
     url: "https://www.epost.go.kr/"
     keywords: ["우정사업본부", "ePOST"]
-  - name: "공공데이터포털 메인"
-    url: "https://www.data.go.kr/"
-    keywords: ["공공데이터포털", "DATA.GO.KR"]
+  - name: "K-ETA 메인"
+    url: "https://www.k-eta.go.kr/"
+    keywords: ["K-ETA", "전자여행허가"]
+  - name: "전자입국신고 메인"
+    url: "https://www.e-arrivalcard.go.kr/"
+    keywords: ["전자입국신고", "e-Arrival"]
+  - name: "국민신문고 메인"
+    url: "https://www.epeople.go.kr/"
+    keywords: ["국민신문고", "민원"]
+  - name: "홈택스 메인"
+    url: "https://www.hometax.go.kr/"
+    keywords: ["홈택스", "국세청"]
+  - name: "나라장터 메인"
+    url: "https://www.g2b.go.kr/"
+    keywords: ["나라장터", "G2B"]
+  - name: "하이코리아 메인"
+    url: "https://www.hikorea.go.kr/"
+    keywords: ["하이코리아", "HiKorea"]
+  - name: "기상청 메인"
+    url: "https://www.weather.go.kr/"
+    keywords: ["기상청", "날씨"]
+  - name: "통계청 메인"
+    url: "https://kostat.go.kr/"
+    keywords: ["통계청", "KOSTAT"]
+  - name: "국가기록원 메인"
+    url: "https://www.archives.go.kr/"
+    keywords: ["국가기록원", "National Archives"]
+  - name: "관세청 메인"
+    url: "https://www.customs.go.kr/"
+    keywords: ["관세청", "Customs"]
+  - name: "국립중앙도서관 메인"
+    url: "https://www.nl.go.kr/"
+    keywords: ["국립중앙도서관", "National Library"]
+  - name: "정보공개포털 메인"
+    url: "https://open.go.kr/"
+    keywords: ["정보공개포털", "Open Government"]
+  - name: "안전정보포털 메인"
+    url: "https://www.safety.go.kr/"
+    keywords: ["안전정보포털", "Safety"]
+  - name: "식품안전나라 메인"
+    url: "https://www.foodsafetykorea.go.kr/"
+    keywords: ["식품안전나라", "Food Safety Korea"]
+  - name: "여권안내 메인"
+    url: "https://www.passport.go.kr/"
+    keywords: ["여권안내", "Passport"]
+  - name: "자동차민원 대국민포털 메인"
+    url: "https://www.car.go.kr/"
+    keywords: ["자동차민원", "Car Portal"]
