@@ -52,10 +52,14 @@ uvicorn main:app --reload
 ### 2. 헬스체크 스크립트 (일괄 검사)
 ```bash
 pip install requests
-python healthcheck.py --create-samples  # 샘플 파일 생성
-python healthcheck.py --urls urls.txt --keywords keywords.json
-# 결과 CSV는 local_test/csv/ 디렉토리에 자동 저장됨
+python healthcheck.py  # 기본 테스트 URL 사용
+python healthcheck.py local_test/samples/urls.txt  # URL 파일 사용
 ```
+
+**파일 경로**:
+- **샘플 URL 파일**: `local_test/samples/urls.txt`에 저장
+- **CSV 결과 파일**: `local_test/csv/health_check_results.csv`에 자동 저장
+- **키워드 설정**: `res/keywords.json` 사용
 
 ### 3. 프로덕션 배포
 - **FastAPI + Caddy**: `politeping/README.md` 참조
@@ -102,7 +106,7 @@ python healthcheck.py --urls urls.txt --keywords keywords.json
 
 ### 1. 기본 FastAPI 버전 (`main.py`)
 
-**설정 파일**: `endpoints.yaml`
+**설정 파일**: `res/endpoints.yaml`
 
 ```yaml
 endpoints:
@@ -120,7 +124,7 @@ endpoints:
 
 ### 2. 프로덕션 FastAPI + Caddy 버전
 
-**설정 파일**: `politeping/endpoints.yaml`
+**설정 파일**: `res/endpoints.yaml`
 
 ```yaml
 endpoints:
@@ -136,13 +140,13 @@ endpoints:
 
 ### 3. 헬스체크 스크립트 버전
 
-**URL 목록 파일** (예: `urls.txt`):
+**URL 목록 파일** (예: `res/urls.txt`):
 ```
 https://example1.go.kr/
 https://example2.go.kr/
 ```
 
-**키워드 설정 파일** (`keywords.json`):
+**키워드 설정 파일** (`res/keywords.json`):
 ```json
 {
   "https://example1.go.kr/": ["키워드1", "키워드2"],
@@ -355,9 +359,11 @@ else:
 ```
 GovPulse/
 ├── main.py                      # 기본 FastAPI 서버
-├── endpoints.yaml               # 모니터링 대상 사이트 설정
-├── keywords.json                # 키워드 기반 장애 감지 설정
 ├── healthcheck.py               # 헬스체크 스크립트
+├── res/                         # 리소스 파일 디렉토리
+│   ├── endpoints.yaml           # 모니터링 대상 사이트 설정
+│   ├── keywords.json            # 키워드 기반 장애 감지 설정
+│   └── urls.txt                 # URL 목록 파일
 ├── local_test/                  # 로컬 테스트 디렉토리
 │   ├── samples/                 # 샘플 CSV 파일 위치 (git 추적)
 │   │   └── sample.csv
@@ -369,7 +375,6 @@ GovPulse/
 │   │   ├── main.py
 │   │   ├── checker.py
 │   │   └── ...
-│   ├── endpoints.yaml
 │   └── README.md
 └── README.md
 ```
@@ -382,10 +387,12 @@ GovPulse/
 
 ## 🔄 최근 변경사항
 
-### v2025.09.30 - 프로젝트 정리 및 구조 개선
+### v2025.09.30 - 리소스 파일 구조 개선
+- **res 디렉토리 도입**: 설정 파일(`endpoints.yaml`, `keywords.json`, `urls.txt`)을 `res/` 디렉토리로 이동하여 체계적인 리소스 관리
 - **Firebase Functions 제거**: 미사용 Firebase Functions 디렉토리 완전 삭제
 - **CSV 경로 표준화**: 결과 파일은 `local_test/csv/`에 저장, 샘플은 `local_test/samples/`에 보관
-- **문서 개선**: 프로젝트 구조 및 CSV 파일 위치 명시
+- **문서 개선**: 프로젝트 구조 및 리소스 파일 위치 명시
+- **모든 참조 업데이트**: `main.py`, `healthcheck.py`, `politeping/` 모듈의 파일 경로를 새로운 구조에 맞게 수정
 
 ### v2025.9.29 - 지능형 3단계 건강 상태 시스템
 - **3단계 상태 도입**: Healthy/Degraded/Unhealthy로 세분화

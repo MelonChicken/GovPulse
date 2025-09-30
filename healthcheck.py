@@ -629,6 +629,6 @@ if __name__ == "__main__":
     # Run comprehensive health check
     results = check_multiple_urls(
         urls,
-        cfg_path="keywords.json",
+        cfg_path="res/keywords.json",
         csv_filename="local_test/csv/health_check_results.csv"
     )
