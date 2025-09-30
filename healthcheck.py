@@ -630,5 +630,5 @@ if __name__ == "__main__":
     results = check_multiple_urls(
         urls,
         cfg_path="keywords.json",
-        csv_filename="health_check_ultimate.csv"
+        csv_filename="local_test/health_check_ultimate.csv"
     )
