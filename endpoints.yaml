@@ -20,10 +20,10 @@ endpoints:
     url: "https://www.law.go.kr/"
     keywords: ["국가법령", "법령정보"]
   - name: "우정사업본부 메인"
-    url: "https://www.epost.go.kr/"
+    url: "https://www.epost.go.kr/main.retrieveMainPage.comm"
     keywords: ["우정사업본부", "ePOST"]
   - name: "K-ETA 메인"
-    url: "https://www.k-eta.go.kr/"
+    url: "https://www.k-eta.go.kr/portal/newapply/index.do"
     keywords: ["K-ETA", "전자여행허가"]
   - name: "전자입국신고 메인"
     url: "https://www.e-arrivalcard.go.kr/"
@@ -32,13 +32,13 @@ endpoints:
     url: "https://www.epeople.go.kr/"
     keywords: ["국민신문고", "민원"]
   - name: "홈택스 메인"
-    url: "https://www.hometax.go.kr/"
+    url: "https://hometax.go.kr/websquare/websquare.html?w2xPath=/ui/pp/index_pp.xml&menuCd=index3"
     keywords: ["홈택스", "국세청"]
   - name: "나라장터 메인"
     url: "https://www.g2b.go.kr/"
     keywords: ["나라장터", "G2B"]
   - name: "하이코리아 메인"
-    url: "https://www.hikorea.go.kr/"
+    url: "https://www.hikorea.go.kr/Main.pt"
     keywords: ["하이코리아", "HiKorea"]
   - name: "기상청 메인"
     url: "https://www.weather.go.kr/"
@@ -62,10 +62,10 @@ endpoints:
     url: "https://www.safety.go.kr/"
     keywords: ["안전정보포털", "Safety"]
   - name: "식품안전나라 메인"
-    url: "https://www.foodsafetykorea.go.kr/"
+    url: "https://www.foodsafetykorea.go.kr/main.do"
     keywords: ["식품안전나라", "Food Safety Korea"]
   - name: "여권안내 메인"
-    url: "https://www.passport.go.kr/"
+    url: "https://www.passport.go.kr/home/kor/main.do"
     keywords: ["여권안내", "Passport"]
   - name: "자동차민원 대국민포털 메인"
     url: "https://www.car.go.kr/"
