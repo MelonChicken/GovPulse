@@ -54,6 +54,7 @@ uvicorn main:app --reload
 pip install requests
 python healthcheck.py --create-samples  # 샘플 파일 생성
 python healthcheck.py --urls urls.txt --keywords keywords.json
+# 결과 CSV는 local_test/csv/ 디렉토리에 자동 저장됨
 ```
 
 ### 3. 프로덕션 배포
@@ -349,9 +350,44 @@ else:
 - **글로벌**: 최대 3개 동시 요청
 - **최소 간격**: 호스트당 60초, 엔드포인트당 10분
 
+## 📁 프로젝트 파일 구조
+
+```
+GovPulse/
+├── main.py                      # 기본 FastAPI 서버
+├── endpoints.yaml               # 모니터링 대상 사이트 설정
+├── keywords.json                # 키워드 기반 장애 감지 설정
+├── healthcheck.py               # 헬스체크 스크립트
+├── local_test/                  # 로컬 테스트 디렉토리
+│   ├── samples/                 # 샘플 CSV 파일 위치 (git 추적)
+│   │   └── sample.csv
+│   ├── csv/                     # 산출된 CSV 결과 저장소 (git 무시)
+│   │   └── health_check_results.csv
+│   └── test_main.http          # API 테스트 파일
+├── politeping/                  # 프로덕션 배포용 디렉토리
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── checker.py
+│   │   └── ...
+│   ├── endpoints.yaml
+│   └── README.md
+└── README.md
+```
+
+### 📋 CSV 파일 관리
+
+- **샘플 파일**: `local_test/samples/` - Git에 포함되어 예시로 제공
+- **결과 파일**: `local_test/csv/` - Git에서 제외되며, 스크립트 실행 시 자동 생성
+- **출력 경로**: `healthcheck.py` 실행 시 결과는 `local_test/csv/health_check_results.csv`에 자동 저장
+
 ## 🔄 최근 변경사항
 
-### v2024.12.29 - 지능형 3단계 건강 상태 시스템
+### v2025.09.30 - 프로젝트 정리 및 구조 개선
+- **Firebase Functions 제거**: 미사용 Firebase Functions 디렉토리 완전 삭제
+- **CSV 경로 표준화**: 결과 파일은 `local_test/csv/`에 저장, 샘플은 `local_test/samples/`에 보관
+- **문서 개선**: 프로젝트 구조 및 CSV 파일 위치 명시
+
+### v2025.9.29 - 지능형 3단계 건강 상태 시스템
 - **3단계 상태 도입**: Healthy/Degraded/Unhealthy로 세분화
 - **중립 키워드 시스템**: 계획된 유지보수/업데이트 정보 구분
 - **메타 태그 지원**: description, og:title/description을 제목 대안으로 인정

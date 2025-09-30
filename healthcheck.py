@@ -525,7 +525,7 @@ def health_check_url(url: str, cfg: Dict[str, Any]) -> Dict[str, Any]:
         "error": last_exception
     }
 
-def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "health_check_ultimate.csv") -> List[Dict[str, Any]]:
+def check_multiple_urls(urls: List[str], cfg_path: str, csv_filename: str = "local_test/csv/health_check_results.csv") -> List[Dict[str, Any]]:
     """
     Check multiple URLs and save comprehensive results to CSV.
     Reports Healthy/Degraded/Unhealthy states with enhanced analysis.
@@ -630,5 +630,5 @@ if __name__ == "__main__":
     results = check_multiple_urls(
         urls,
         cfg_path="keywords.json",
-        csv_filename="local_test/health_check_ultimate.csv"
+        csv_filename="local_test/csv/health_check_results.csv"
     )
