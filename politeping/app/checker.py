@@ -10,7 +10,7 @@ def host_of(url: str) -> str:
     return urlparse(url).netloc
 
 class Checker:
-    def __init__(self, rate: RateState, keywords_path: str = "keywords.json"):
+    def __init__(self, rate: RateState, keywords_path: str = "res/keywords.json"):
         self.rate = rate
         self.last_result: Dict[str, Dict[str, Any]] = {}
         self.keywords_cfg = self._load_keywords(keywords_path)

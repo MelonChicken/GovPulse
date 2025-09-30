@@ -45,7 +45,7 @@ def load_config():
     global CONFIG, ENDPOINTS, HEALTHCHECK_CONFIG
 
     try:
-        with open('endpoints.yaml', 'r', encoding='utf-8') as f:
+        with open('res/endpoints.yaml', 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
 
         CONFIG = {
@@ -74,7 +74,7 @@ def load_config():
 
         # Load healthcheck configuration
         try:
-            HEALTHCHECK_CONFIG = load_keywords("keywords.json")
+            HEALTHCHECK_CONFIG = load_keywords("res/keywords.json")
             logger.info("Healthcheck configuration loaded successfully.")
         except Exception as hc_e:
             logger.warning(f"Failed to load healthcheck config: {hc_e}. Using simple HTTP status checks.")
