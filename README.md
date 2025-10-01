@@ -324,9 +324,14 @@ GovPulse/
 │   │   ├── task.yml             # 태스크/Chore 템플릿
 │   │   └── config.yml           # 이슈 템플릿 설정
 │   └── pull_request_template.md # PR 템플릿
+├── legal/                       # 법적 문서 (v2025.10.01+)
+│   ├── NOTICE                   # 법적 고지
+│   ├── SERVICE_TERMS.md         # 서비스 이용약관
+│   └── AUP.md                   # 허용/금지 사용 정책
 ├── main.py                      # FastAPI 서버
 ├── healthcheck.py               # 헬스체크 스크립트
 ├── requirements.txt             # Python 의존성
+├── LICENSE                      # MIT License
 ├── res/                         # 리소스 파일 디렉토리
 │   ├── endpoints.yaml           # 모니터링 대상 사이트 설정
 │   ├── keywords.json            # 키워드 기반 장애 감지 설정
@@ -397,6 +402,11 @@ GovPulse/
 
 ### 호스티드 서비스 약관
 배포된 서비스 (https://govpulse.onrender.com) 이용 시 다음 문서가 적용됩니다:
+
+- **[legal/NOTICE](legal/NOTICE)** - 법적 고지
+- **[legal/SERVICE_TERMS.md](legal/SERVICE_TERMS.md)** - 서비스 이용약관
+- **[legal/AUP.md](legal/AUP.md)** - 허용/금지 사용 정책 (Acceptable Use Policy)
+=======
 - **[SERVICE_TERMS.md](SERVICE_TERMS.md)** - 서비스 이용약관
 - **[AUP.md](AUP.md)** - 허용/금지 사용 정책 (Acceptable Use Policy)
 
@@ -415,4 +425,4 @@ GovPulse/
 - Email: m.l02n23@gmail.com
 - Issue: https://github.com/MelonChicken/GovPulse/issues
 
-자세한 내용은 [NOTICE](NOTICE), [SERVICE_TERMS.md](SERVICE_TERMS.md), [AUP.md](AUP.md)를 참조하세요.
+자세한 내용은 [`legal/`](legal/) 디렉토리의 문서를 참조하세요.
