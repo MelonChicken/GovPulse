@@ -1,1 +1,0 @@
-# PolitePing FastAPI Application
