@@ -1,0 +1,13 @@
+name: 🧹 Task / Chore
+description: 리팩토링/문서/배포 등
+title: "[Chore] "
+labels: ["chore"]
+body:
+  - type: textarea
+    id: desc
+    attributes: { label: 작업 설명 }
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 기준 (Acceptance Criteria)
+      description: 체크 가능한 항목 위주로 작성

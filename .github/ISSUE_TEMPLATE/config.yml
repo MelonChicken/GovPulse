@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 질문/토론
+    url: https://github.com/MelonChicken/GovPulse/discussions
+    about: 단순 질문은 Discussions를 이용해주세요

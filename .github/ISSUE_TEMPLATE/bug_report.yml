@@ -1,0 +1,35 @@
+name: 🐞 Bug Report
+description: 버그 신고
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 어떤 문제가 발생했나요?
+      description: 실제 결과를 구체적으로 적어주세요
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차
+      placeholder: |
+        1. ...
+        2. ...
+    validations: { required: true }
+  - type: input
+    id: expected
+    attributes: { label: 기대 결과 }
+  - type: input
+    id: target
+    attributes: { label: 대상 URL (예: https://www.gov.kr/) }
+  - type: textarea
+    id: detector
+    attributes:
+      label: 판정 근거 문자열/패턴
+      description: 감지된 키워드, 상태코드, 텍스트 길이 등
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영향 영역
+      options: ["crawler","api","web-ui","infra/deploy (Render)","docs"]

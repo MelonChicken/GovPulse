@@ -1,0 +1,21 @@
+name: ✨ Feature Request
+description: 기능/개선 제안
+title: "[Feat] "
+labels: ["enhancement","needs-triage"]
+body:
+  - type: textarea
+    id: motivation
+    attributes: { label: 문제/동기 }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: 제안 내용 (API/스키마/UX 포함) }
+    validations: { required: true }
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: 범위
+      options:
+        - label: API 변경 포함
+        - label: DB/스키마 변경 포함
+        - label: 문서 수정 필요
