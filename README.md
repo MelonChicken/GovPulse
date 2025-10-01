@@ -28,15 +28,11 @@
 
 ## 🔀 프로젝트 구성
 
-### 1. 🐍 기본 FastAPI 버전
-- **파일**: `main.py`, `endpoints.yaml`
-- **용도**: 빠른 테스트 및 개발
+### 1. 🐍 FastAPI 버전
+- **파일**: `main.py`, `res/endpoints.yaml`
+- **용도**: 웹 모니터링 및 API 제공
 
-### 2. 🏭 프로덕션 FastAPI + Caddy 버전
-- **디렉토리**: `politeping/`
-- **용도**: HTTPS 자동 인증서, systemd 서비스
-
-### 3. 🔍 헬스체크 스크립트
+### 2. 🔍 헬스체크 스크립트
 - **파일**: `healthcheck.py`, `healthcheck_enhanced.py`
 - **용도**: 오프라인 일괄 상태 검사
 
@@ -44,32 +40,32 @@
 
 ### 1. 기본 FastAPI (개발용)
 ```bash
-pip install requests fastapi uvicorn pyyaml
-uvicorn main:app --reload
+# 의존성 설치
+pip install -r requirements.txt
+
+# 로컬 개발 서버 실행
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
 # 접속: http://localhost:8000
 ```
 
 ### 2. 헬스체크 스크립트 (일괄 검사)
 ```bash
-pip install requests
-python healthcheck.py  # 기본 테스트 URL 사용
-python healthcheck.py local_test/samples/urls.txt  # URL 파일 사용
+pip install requests beautifulsoup4
+python healthcheck.py  # res/urls.txt 사용
+python healthcheck.py local_test/test_urls.txt  # 커스텀 URL 파일 사용
 ```
 
 **파일 경로**:
-- **샘플 URL 파일**: `local_test/samples/urls.txt`에 저장
+- **URL 파일**: `res/urls.txt` 또는 `local_test/test_urls.txt`
 - **CSV 결과 파일**: `local_test/csv/health_check_results.csv`에 자동 저장
 - **키워드 설정**: `res/keywords.json` 사용
-
-### 3. 프로덕션 배포
-- **FastAPI + Caddy**: `politeping/README.md` 참조
 
 ## 📊 구현체별 특징
 
 | 구성요소 | 용도 | 주요 기능 |
 |---------|------|-----------|
-| **기본 FastAPI** | 개발/테스트 | robots.txt 가드, 실시간 웹 모니터링, 간소화된 상태 표시 |
-| **FastAPI + Caddy** | 프로덕션 배포 | HTTPS 자동화, systemd 서비스, 고성능, 키워드 기반 장애 감지 |
+| **FastAPI** | 웹 모니터링 | robots.txt 가드, 실시간 웹 모니터링, 3단계 상태 분석 |
 | **헬스체크 스크립트** | 오프라인 검사 | 일괄 처리, CSV 출력, 키워드 감지 |
 
 ## 🎯 사용 시나리오
@@ -98,8 +94,7 @@ python healthcheck.py local_test/samples/urls.txt  # URL 파일 사용
 
 | 구성요소 | 문서 위치 | 설명 |
 |---------|-----------|------|
-| 기본 FastAPI | `main.py` 코드 참조 | 단일 파일 구현 |
-| 프로덕션 FastAPI + Caddy | `politeping/README.md` | 전체 스택 배포 |
+| FastAPI | `main.py` 코드 참조 | 단일 파일 구현 |
 | 헬스체크 스크립트 | `healthcheck_usage.md` | 오프라인 모니터링 |
 
 ## 🌐 모니터링 사이트 추가 방법
@@ -122,23 +117,7 @@ endpoints:
     keywords: ["홈택스", "국세청", "HOMETAX"]
 ```
 
-### 2. 프로덕션 FastAPI + Caddy 버전
-
-**설정 파일**: `res/endpoints.yaml`
-
-```yaml
-endpoints:
-  - name: "사이트 표시명"
-    url: "https://example.go.kr/"
-```
-
-**예시 추가**:
-```yaml
-  - name: "국세청 홈택스"
-    url: "https://www.hometax.go.kr/"
-```
-
-### 3. 헬스체크 스크립트 버전
+### 2. 헬스체크 스크립트 버전
 
 **URL 목록 파일** (예: `res/urls.txt`):
 ```
@@ -216,27 +195,7 @@ else:
 - robots.txt 완전 준수 (`main.py:104-151`)
 - HEAD 요청 우선, 405 오류시 GET 요청으로 재시도 (`main.py:244-252`)
 
-### 2. 🏭 프로덕션 FastAPI + Caddy 버전 (`politeping/`)
-
-#### 상세 판단 로직 (`politeping/app/checker.py:261-273`)
-```python
-if (HTTP 200-399 범위):
-    if (부정 키워드 감지):
-        → Unhealthy
-    else:
-        → Healthy
-elif (HTTP 상태 코드 존재):
-    → Error
-else:
-    → Error (연결 실패)
-```
-
-**핵심 분석 과정**:
-1. **요청 단계** (`checker.py:244`) - HEAD 요청 시도, 실패시 GET 스트리밍
-2. **콘텐츠 분석** - 전체 페이지 콘텐츠 다운로드 (최대 3MB)
-3. **부정 키워드 검사** - 글로벌 + 도메인별 키워드 및 정규식 패턴 매칭
-
-### 3. 🔍 헬스체크 스크립트 (`healthcheck.py`) - **새로 개선됨**
+### 2. 🔍 헬스체크 스크립트 (`healthcheck.py`) - **새로 개선됨**
 
 #### 최고 수준의 3단계 종합 분석
 ```python
@@ -358,41 +317,62 @@ else:
 
 ```
 GovPulse/
-├── main.py                      # 기본 FastAPI 서버
+├── .github/                     # GitHub 템플릿 (v2025.10.01+)
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.yml       # 버그 신고 템플릿
+│   │   ├── feature_request.yml  # 기능 제안 템플릿
+│   │   ├── task.yml             # 태스크/Chore 템플릿
+│   │   └── config.yml           # 이슈 템플릿 설정
+│   └── pull_request_template.md # PR 템플릿
+├── main.py                      # FastAPI 서버
 ├── healthcheck.py               # 헬스체크 스크립트
+├── requirements.txt             # Python 의존성
 ├── res/                         # 리소스 파일 디렉토리
 │   ├── endpoints.yaml           # 모니터링 대상 사이트 설정
 │   ├── keywords.json            # 키워드 기반 장애 감지 설정
 │   └── urls.txt                 # URL 목록 파일
 ├── local_test/                  # 로컬 테스트 디렉토리
-│   ├── samples/                 # 샘플 CSV 파일 위치 (git 추적)
-│   │   └── sample.csv
-│   ├── csv/                     # 산출된 CSV 결과 저장소 (git 무시)
-│   │   └── health_check_results.csv
-│   └── test_main.http          # API 테스트 파일
-├── politeping/                  # 프로덕션 배포용 디렉토리
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── checker.py
-│   │   └── ...
-│   └── README.md
+│   ├── README.md                # 테스트 디렉토리 가이드 (v2025.10.01+)
+│   ├── samples/                 # 샘플 파일 (git 추적)
+│   ├── csv/                     # 산출 CSV 결과 (git 무시)
+│   ├── test_urls.txt            # 테스트용 URL 목록
+│   └── test_main.http           # HTTP 요청 테스트
 └── README.md
 ```
 
-### 📋 CSV 파일 관리
+### 📋 파일 관리 정책
 
-- **샘플 파일**: `local_test/samples/` - Git에 포함되어 예시로 제공
-- **결과 파일**: `local_test/csv/` - Git에서 제외되며, 스크립트 실행 시 자동 생성
-- **출력 경로**: `healthcheck.py` 실행 시 결과는 `local_test/csv/health_check_results.csv`에 자동 저장
+#### Git 추적 대상
+- 소스 코드 (`*.py`)
+- 설정 파일 (`res/`, `requirements.txt`)
+- 샘플/템플릿 (`local_test/samples/`, `.github/`)
+- 문서 (`README.md`, `local_test/README.md`)
+
+#### Git 무시 대상 (.gitignore)
+- 테스트 산출물 (`local_test/csv/*.csv`, `local_test/csv/*.json`)
+- 환경 변수 (`.env`, `.env.*`)
+- IDE 설정 (`.idea/`, `.vscode/`)
+- Python 캐시 (`__pycache__/`, `*.pyc`)
+
+자세한 내용은 `local_test/README.md` 참조
 
 ## 🔄 최근 변경사항
 
-### v2025.09.30 - 리소스 파일 구조 개선
-- **res 디렉토리 도입**: 설정 파일(`endpoints.yaml`, `keywords.json`, `urls.txt`)을 `res/` 디렉토리로 이동하여 체계적인 리소스 관리
-- **Firebase Functions 제거**: 미사용 Firebase Functions 디렉토리 완전 삭제
-- **CSV 경로 표준화**: 결과 파일은 `local_test/csv/`에 저장, 샘플은 `local_test/samples/`에 보관
+### v2025.10.01 - 프로젝트 인프라 개선
+- **GitHub 템플릿 도입**: Issue/PR 템플릿 추가로 협업 품질 향상
+  - Bug Report, Feature Request, Task/Chore 템플릿
+  - 표준화된 PR 체크리스트
+- **로컬 테스트 디렉토리 표준화**: `local_test/` 구조 명확화 및 README 추가
+- **배포 문서 개선**: Render 배포 가이드 및 주의사항 추가
+- **의존성 업데이트**: `beautifulsoup4` 추가, requirements.txt 정리
+- **.gitignore 개선**: CSV/JSON 산출물 제외 정책 명확화
+
+### v2025.09.30 - 프로젝트 구조 정리
+- **res 디렉토리 도입**: 설정 파일을 `res/`로 이동하여 체계적 관리
+- **Firebase Functions 제거**: 미사용 디렉토리 완전 삭제
+- **politeping 제거**: Render 배포에서 사용하지 않는 디렉토리 제거
+- **CSV 경로 표준화**: 결과 파일은 `local_test/csv/`, 샘플은 `local_test/samples/`
 - **문서 개선**: 프로젝트 구조 및 리소스 파일 위치 명시
-- **모든 참조 업데이트**: `main.py`, `healthcheck.py`, `politeping/` 모듈의 파일 경로를 새로운 구조에 맞게 수정
 
 ### v2025.9.29 - 지능형 3단계 건강 상태 시스템
 - **3단계 상태 도입**: Healthy/Degraded/Unhealthy로 세분화
