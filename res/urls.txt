@@ -1,12 +1,32 @@
-# Government websites for health checking
-https://www.law.go.kr/
-https://www.gov.kr/
-https://www.k-eta.go.kr/
-https://www.e-arrivalcard.go.kr/
-https://www.epost.go.kr/
-https://www.data.go.kr/
+# Government websites currently monitored by GovPulse
+# Generated from endpoints.yaml
 
-# Test URLs for different scenarios
-https://httpbin.org/status/200
-https://httpbin.org/status/500
-https://httpbin.org/delay/2
+# Core Government Services
+https://www.gov.kr/
+https://www.data.go.kr/
+https://www.law.go.kr/
+https://www.epost.go.kr/main.retrieveMainPage.comm
+https://www.k-eta.go.kr/portal/newapply/index.do
+https://www.e-arrivalcard.go.kr/
+
+# Public Services
+https://www.epeople.go.kr/
+https://hometax.go.kr/websquare/websquare.html?w2xPath=/ui/pp/index_pp.xml&menuCd=index3
+https://www.g2b.go.kr/
+https://www.hikorea.go.kr/Main.pt
+
+# Information & Statistics
+https://www.weather.go.kr/
+https://kostat.go.kr/
+https://www.archives.go.kr/
+https://www.customs.go.kr/
+https://www.nl.go.kr/
+
+# Transparency & Safety
+https://open.go.kr/
+https://www.safety.go.kr/
+https://www.foodsafetykorea.go.kr/main.do
+
+# Citizen Services
+https://www.passport.go.kr/home/kor/main.do
+https://www.car.go.kr/
