@@ -45,7 +45,9 @@ Thumbs.db
 .claude/
 
 # 로컬 테스트/데이터 디렉토리: 산출물은 제외, 샘플만 포함
-local_test/csv/
+# local_test/ 구조: samples/ (샘플 입력), csv/ (산출 결과)
+local_test/csv/*.csv
+local_test/csv/*.json
 local_test/*.csv
 !local_test/samples/
 !local_test/samples/*.csv
@@ -53,9 +55,5 @@ data/
 !data/README.md
 !data/samples/
 !data/samples/*.csv
-
-# --- Section to be ignored optionally ---
-# .github/workflows/  <-- ignore하면 안 됨
-.env
 .claude
 .idea
