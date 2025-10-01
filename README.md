@@ -402,13 +402,9 @@ GovPulse/
 
 ### 호스티드 서비스 약관
 배포된 서비스 (https://govpulse.onrender.com) 이용 시 다음 문서가 적용됩니다:
-
 - **[legal/NOTICE](legal/NOTICE)** - 법적 고지
 - **[legal/SERVICE_TERMS.md](legal/SERVICE_TERMS.md)** - 서비스 이용약관
 - **[legal/AUP.md](legal/AUP.md)** - 허용/금지 사용 정책 (Acceptable Use Policy)
-=======
-- **[SERVICE_TERMS.md](SERVICE_TERMS.md)** - 서비스 이용약관
-- **[AUP.md](AUP.md)** - 허용/금지 사용 정책 (Acceptable Use Policy)
 
 이 약관은 **호스티드 서비스 이용에만 적용**되며, 오픈소스 라이선스(MIT)는 변경하지 않습니다.
 
